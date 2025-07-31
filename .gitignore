@@ -1,6 +1,9 @@
 build/
 src/visualiser/venv
 .cache/
+.vscode/
+CMakeUserPresets.json
+compile_commands.json
 
 # Prerequisites
 *.d
