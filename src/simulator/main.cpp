@@ -1,6 +1,9 @@
+#include <atomic>
 #include <cmath>
+#include <mutex>
 #include <nlohmann/json.hpp>
 #include <print>
+#include <thread>
 #include <zmq.hpp>
 
 #include "ringlib/RingAttractor.hpp"
@@ -10,7 +13,7 @@ using json = nlohmann::json;
 using RobotState = Eigen::Matrix<double, 5, 1>;
 using ControlSpace = Eigen::Matrix<double, 2, 1>;
 
-constexpr double STEP_SIZE = 0.01;
+constexpr double STEP_SIZE = 0.1;
 
 std::tuple<double &, double &, double &, double &, double &> by_elements(RobotState &x) {
   return std::tie(x(0), x(1), x(2), x(3), x(4));
@@ -66,16 +69,31 @@ auto to_json(const ringlib::FeleRingAttractor<N> &attractor) -> json {
   return json{{"neurons", attractor.state().transpose().eval()}};
 }
 
+ringlib::FeleRingAttractor<18> ring_attractor(0.05, 9.0);
+std::mutex attractor_mutex;
+std::atomic<bool> running{true};
+
+void simulation_loop() {
+  while (running) {
+    {
+      std::lock_guard<std::mutex> lock(attractor_mutex);
+      ring_attractor.update(decltype(ring_attractor.neurons)::Zero(), STEP_SIZE);
+    }
+    // Optionally sleep for a very short time to avoid 100% CPU
+    // std::this_thread::sleep_for(std::chrono::microseconds(100));
+  }
+}
+
 int main() {
-
-  ringlib::FeleRingAttractor<18> ring_attractor(0.15);
-
   zmq::context_t context(1);
   zmq::socket_t responder(context, ZMQ_REP);
   responder.bind("ipc:///tmp/zmq-sim.sock");
   std::println("Simulator server started on ipc:///tmp/zmq-sim.sock");
 
-  ring_attractor.update({1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 0.01);
+  ring_attractor.update({0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+                        STEP_SIZE);
+
+  std::thread sim_thread(simulation_loop);
 
   while (true) {
     zmq::message_t request;
@@ -93,15 +111,20 @@ int main() {
       continue;
     }
 
-    ring_attractor.update(decltype(ring_attractor.neurons)::Zero(), 0.06);
-
     std::string type = req_json.value("type", "get_state");
     if (type == "get_state") {
-      std::string msg_str = to_json(ring_attractor).dump();
+      std::string msg_str;
+      {
+        std::lock_guard<std::mutex> lock(attractor_mutex);
+        msg_str = to_json(ring_attractor).dump();
+      }
       responder.send(zmq::buffer(msg_str), zmq::send_flags::none);
     } else {
       responder.send(zmq::buffer("{\"error\":\"unknown request type\"}"),
                      zmq::send_flags::none);
     }
   }
+
+  running = false;
+  sim_thread.join();
 }
