@@ -1,0 +1,23 @@
+CompileFlags:
+  Add: [
+  -D__cpp_concepts=202002L,
+  -Wno-unicode,
+  -Wunicode-identifier,
+  -fextended-identifiers,
+  -Wno-mathematical-notation-identifier-extension,
+  -std=c++23,
+  -Wall,
+  -Wextra,
+  -Wshadow,
+  -Wnon-virtual-dtor,
+  -Wold-style-cast,
+  -Wcast-align,
+  -Wunused,
+  -Woverloaded-virtual,
+  -Wpedantic,
+  -Wconversion,
+  -Wsign-conversion,
+  -Wnull-dereference,
+  -Wdouble-promotion,
+  -Wformat=2
+]
