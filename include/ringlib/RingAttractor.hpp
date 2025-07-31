@@ -17,13 +17,6 @@ constexpr auto angle_of(size_t i) -> double {
   return 2. * pi * static_cast<double>(i) / static_cast<double>(N);
 }
 
-// template <size_t N>
-// constexpr auto angle_between(size_t i, size_t j) -> double {
-//   using std::numbers::pi;
-//   auto diff = inter_neuron_distance<N>(i, j);
-//   return 2. * pi * static_cast<double>(diff) / static_cast<double>(N);
-// }
-
 template <size_t N>
 constexpr auto angle_between(size_t i, size_t j) -> double {
   using std::numbers::pi;
@@ -36,6 +29,7 @@ constexpr auto angle_between(size_t i, size_t j) -> double {
   return 2. * pi * static_cast<double>(diff) / static_cast<double>(N);
 }
 
+// Marco Fele's kernel
 template <size_t N>
 constexpr auto cosine_kernel(double ν) {
   using std::numbers::pi;
@@ -51,20 +45,25 @@ constexpr auto cosine_kernel(double ν) {
 }
 
 template <size_t N>
-struct RingAttractor {
+struct FeleRingAttractor {
   using VectorType = Eigen::Vector<double, N>;
   using MatrixType = Eigen::Matrix<double, N, N>;
 
   double ν;
+  double network_coupling_constant;
   VectorType neurons;
   MatrixType weights;
 
-  RingAttractor(double ν = 0.5)
-      : ν(ν), neurons(VectorType::Zero()), weights(cosine_kernel<N>(ν)) {}
+  FeleRingAttractor(double ν = 0.5, double network_coupling_constant = 1.)
+      : ν(ν),
+        network_coupling_constant(network_coupling_constant),
+        neurons(VectorType::Zero()),
+        weights(cosine_kernel<N>(ν)) {}
 
-  void update(const VectorType &inputs, double dt) {
-    // Ring attractor dynamics: dz/dt = -z + tanh(Wz + inputs)
-    VectorType activity = weights * neurons + inputs;
+  void update(const VectorType &input, double dt) {
+    // Ring attractor dynamics: dz/dt = -z + tanh(μWz + b) updated using Euler
+    // integration.
+    VectorType activity = network_coupling_constant * weights * neurons + input;
     neurons += dt * (-neurons + activity.array().tanh().matrix());
   }
 
@@ -83,6 +82,8 @@ struct RingAttractor {
   }
 };
 
+// As per Marco Fele, use Von-Mises distribution function for use as shape for input
+// signal.
 constexpr auto von_mises(double μ, double κ, double x) -> double {
   using std::numbers::pi;
 

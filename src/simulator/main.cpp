@@ -62,13 +62,13 @@ auto to_json(const RobotModel &robot) -> json {
 }
 
 template <size_t N>
-auto to_json(const ringlib::RingAttractor<N> &attractor) -> json {
+auto to_json(const ringlib::FeleRingAttractor<N> &attractor) -> json {
   return json{{"neurons", attractor.state().transpose().eval()}};
 }
 
 int main() {
 
-  ringlib::RingAttractor<18> ring_attractor(0.15);
+  ringlib::FeleRingAttractor<18> ring_attractor(0.15);
 
   zmq::context_t context(1);
   zmq::socket_t responder(context, ZMQ_REP);
