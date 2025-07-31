@@ -19,8 +19,11 @@ else:
     COLOR_PRE_BG = '#f0f0f0'
     PLOTLY_TEMPLATE = 'plotly_white'
 
+
 import json
 from collections import deque
+import threading
+import queue
 
 import dash
 from dash import dcc, html, Input, Output, callback
@@ -30,26 +33,57 @@ import numpy as np
 import zmq
 
 
-# ZMQ context and socket setup for REQ/REP
+
+# ZMQ address
 ZMQ_ADDRESS = "ipc:///tmp/zmq-sim.sock"
-context = zmq.Context()
-socket = context.socket(zmq.REQ)
-socket.connect(ZMQ_ADDRESS)
+
+# Queues for communication between Dash and ZMQ thread
+request_queue = queue.Queue()
+response_queue = queue.Queue()
+
+def zmq_worker():
+    context = zmq.Context()
+    socket = context.socket(zmq.REQ)
+    socket.connect(ZMQ_ADDRESS)
+    while True:
+        req = request_queue.get()
+        if req is None:
+            break  # Shutdown signal
+        try:
+            socket.send_json(req)
+            reply = socket.recv()
+            response_queue.put(reply)
+        except Exception as e:
+            response_queue.put(e)
+
+# Start the worker thread
+zmq_thread = threading.Thread(target=zmq_worker, daemon=True)
+zmq_thread.start()
 
 # Store neuron history for time series plot
 neuron_data = deque(maxlen=1000)  # Store last 1000 time steps
 
 
-# Request the current state from the simulator
+# Request the current state from the simulator using the background thread
 def request_state():
     try:
-        socket.send_json({"type": "get_state"})
-        reply = socket.recv()
+        request_queue.put({"type": "get_state"})
+        reply = response_queue.get(timeout=2)  # Wait for up to 2 seconds
+        if isinstance(reply, Exception):
+            print(f"Error requesting state from simulator: {reply}")
+            return None
         data = json.loads(reply)
         return data
-    except Exception as e:
-        print(f"Error requesting state from simulator: {e}")
+    except queue.Empty:
+        print("Timeout waiting for simulator response")
         return None
+import atexit
+
+def shutdown_zmq_thread():
+    request_queue.put(None)
+    zmq_thread.join(timeout=1)
+
+atexit.register(shutdown_zmq_thread)
 
 def create_ring_plot(neurons):
     """Create a circular plot showing neuron activations."""
@@ -232,7 +266,7 @@ app.layout = html.Div([
     # Auto-refresh component
     dcc.Interval(
         id='interval-component',
-        interval=50, # ms
+        interval=250, # ms
         n_intervals=0
     )
 ], style={'backgroundColor': COLOR_BG, 'minHeight': '100vh'})
@@ -260,7 +294,7 @@ def update_plots(n):
 
     # Update neuron history
     if neurons is not None:
-        neuron_data.append(neurons)
+        neuron_data.append(list(neurons))  # ensure a copy is stored
         history_copy = list(neuron_data)
     else:
         history_copy = []
