@@ -2,9 +2,12 @@
 #include <numbers>
 
 #include "catch2/catch_all.hpp"
-#include "catch2/matchers/catch_matchers_range_equals.hpp"
+// #include "catch2/matchers/catch_matchers.hpp"
+// #include "catch2/matchers/catch_matchers_range_equals.hpp"
 //
 #include "ringlib/RingAttractor.hpp"
+
+using Catch::Approx;
 
 constexpr double π = std::numbers::pi;
 
@@ -50,5 +53,53 @@ TEST_CASE("Function angle_between basic sanity") {
   }
   SECTION("Angles should change sign with argument flip") {
     REQUIRE(ringlib::angle_between<4>(1, 0) == -π / 2.);
+  }
+}
+
+TEST_CASE("von_mises distribution properties") {
+  using ringlib::von_mises;
+  constexpr double tol = 1e-10;
+
+  SECTION("Normalization: integral over [-pi, pi] is 1 (approximate by sum)") {
+    constexpr int N = 10000;
+    constexpr double mu = 0.0;
+    constexpr double kappa = 2.0;
+    double sum = 0.0;
+    for (int i = 0; i < N; ++i) {
+      double x = -π + (2 * π) * i / N;
+      sum += von_mises(mu, kappa, x);
+    }
+    double integral = sum * (2 * π / N);
+    REQUIRE(integral == Approx(1.0).margin(1e-4));
+  }
+
+  SECTION("Symmetry: von_mises(mu, kappa, x) == von_mises(-mu, kappa, -x)") {
+    constexpr double kappa = 1.5;
+    constexpr double mu = 0.7;
+    for (double x = -π; x <= π; x += 0.1) {
+      double lhs = von_mises(mu, kappa, x);
+      double rhs = von_mises(-mu, kappa, -x);
+      REQUIRE(lhs == Approx(rhs).margin(1e-10));
+    }
+  }
+
+  SECTION("Limiting case: kappa=0 gives uniform distribution") {
+    constexpr double kappa = 0.0;
+    constexpr double mu = 1.0;  // arbitrary
+    for (double x = -π; x <= π; x += 0.1) {
+      double pdf = von_mises(mu, kappa, x);
+      REQUIRE(pdf == Approx(1.0 / (2 * π)).margin(1e-10));
+    }
+  }
+
+  SECTION(
+      "Maximum at mean: von_mises(mu, kappa, mu) >= von_mises(mu, kappa, x) for all x") {
+    constexpr double kappa = 3.0;
+    constexpr double mu = -0.5;
+    double max_pdf = von_mises(mu, kappa, mu);
+    for (double x = -π; x <= π; x += 0.1) {
+      double pdf = von_mises(mu, kappa, x);
+      REQUIRE(max_pdf >= pdf - 1e-12);
+    }
   }
 }
