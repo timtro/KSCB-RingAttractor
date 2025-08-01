@@ -89,10 +89,9 @@ struct FeleRingAttractor {
 
   auto heading() const -> double {
     using std::numbers::pi;
-    // Decode heading using population vector method
     double x_sum = 0, y_sum = 0;
     for (size_t i = 0; i < N; ++i) {
-      double angle = 2 * pi * i / N;
+      double angle = angle_of<N>(i);
       x_sum += neurons[i] * std::cos(angle);
       y_sum += neurons[i] * std::sin(angle);
     }
