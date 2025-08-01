@@ -1,4 +1,5 @@
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <mutex>
 #include <nlohmann/json.hpp>
@@ -16,8 +17,10 @@ using json = nlohmann::json;
 using RobotState = Eigen::Matrix<double, 5, 1>;
 using ControlSpace = Eigen::Matrix<double, 2, 1>;
 
-constexpr double STEP_SIZE = 0.1;
+constexpr double STEP_SIZE = 0.05;
 constexpr size_t RING_SIZE = 18;
+constexpr double γ = 2.0;
+constexpr double κ = 20.0;
 
 std::tuple<double &, double &, double &, double &, double &> by_elements(RobotState &x) {
   return std::tie(x(0), x(1), x(2), x(3), x(4));
@@ -70,15 +73,22 @@ auto to_json(const ringlib::FeleRingAttractor<N> &attractor) -> json {
   return json{{"neurons", attractor.state().transpose().eval()}};
 }
 
-ringlib::FeleRingAttractor<RING_SIZE> ring_attractor(0.05, 9.0);
-std::mutex attractor_mutex;
+ringlib::FeleRingAttractor<RING_SIZE> ring_attractor(0.5, 6.0);
+std::mutex global_state_mutex;
 std::atomic<bool> running{true};
+
+double θ_in = 0.;
+auto b = ringlib::von_mises_input_single<RING_SIZE>(κ, θ_in, γ);
+// ringlib::FeleRingAttractor<RING_SIZE>::VectorType::Zero();
 
 void simulation_loop() {
   while (running) {
     {
-      std::lock_guard<std::mutex> lock(attractor_mutex);
-      ring_attractor.update(decltype(ring_attractor.neurons)::Zero(), STEP_SIZE);
+      std::lock_guard<std::mutex> lock(global_state_mutex);
+      b = ringlib::von_mises_input_single<RING_SIZE>(κ, θ_in, γ);
+      // b = Eigen::Vector<double, RING_SIZE>::Zero();
+      ring_attractor.update(b, STEP_SIZE);
+      θ_in = std::fmod(θ_in + STEP_SIZE / 50, 2.0 * π) - π;
     }
     // Optionally sleep to throttle
     std::this_thread::sleep_for(std::chrono::microseconds(100));
@@ -90,9 +100,6 @@ int main() {
   zmq::socket_t responder(context, ZMQ_REP);
   responder.bind("ipc:///tmp/zmq-sim.sock");
   std::println("Simulator server started on ipc:///tmp/zmq-sim.sock");
-
-  ring_attractor.update(ringlib::von_mises_input_single<RING_SIZE>(20., π, 1.0),
-                        STEP_SIZE);
 
   std::thread sim_thread(simulation_loop);
 
@@ -116,7 +123,7 @@ int main() {
     if (type == "get_state") {
       std::string msg_str;
       {
-        std::lock_guard<std::mutex> lock(attractor_mutex);
+        std::lock_guard<std::mutex> lock(global_state_mutex);
         msg_str = to_json(ring_attractor).dump();
       }
       responder.send(zmq::buffer(msg_str), zmq::send_flags::none);
