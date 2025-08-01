@@ -2,6 +2,7 @@
 
 #include <Eigen/Dense>
 #include <numbers>
+#include <random>
 
 namespace ringlib {
 
@@ -54,6 +55,23 @@ struct FeleRingAttractor {
   VectorType neurons;
   MatrixType weights;
 
+  struct RandomVectorGenerator {
+    std::mt19937 gen;
+    std::normal_distribution<> dist;
+
+    RandomVectorGenerator() : gen(std::random_device{}()), dist(0., 1E-4) {}
+
+    VectorType operator()() {
+      VectorType noise;
+      for (int i = 0; i < N; ++i) {
+        noise(i) = dist(gen) / static_cast<double>(N);
+      }
+      return noise;
+    }
+  };
+
+  RandomVectorGenerator random_vector;
+
   FeleRingAttractor(double ν = 0.5, double network_coupling_constant = 1.)
       : ν(ν),
         network_coupling_constant(network_coupling_constant),
@@ -64,7 +82,7 @@ struct FeleRingAttractor {
     // Ring attractor dynamics: dz/dt = -z + tanh(μWz + b) updated using Euler
     // integration.
     VectorType activity = network_coupling_constant * weights * neurons + input;
-    neurons += dt * (-neurons + activity.array().tanh().matrix());
+    neurons += dt * (-neurons + activity.array().tanh().matrix()) + random_vector();
   }
 
   auto state() const -> VectorType { return neurons; }
