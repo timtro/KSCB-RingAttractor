@@ -91,11 +91,49 @@ constexpr auto von_mises(double μ, double κ, double x) -> double {
   double diff = x - μ;
   diff = std::fmod(diff + pi, 2.0 * pi) - pi;
 
-  // PDF: f(x|μ,κ) = exp(κ*cos(x-μ)) / (2π * I₀(κ))
+  // PDF: f(x; μ, κ) = exp(κ * cos(x - μ)) / (2π * I₀(κ))
   double numerator = std::exp(κ * std::cos(diff));
   double denominator = 2.0 * pi * std::cyl_bessel_i(0, κ);
 
   return numerator / denominator;
+}
+
+// Von Mises distribution function normalised such that the peak has height 1.
+constexpr auto von_mises_peak_normalised(double μ, double κ, double x) -> double {
+  using std::numbers::pi;
+
+  // Normalize the difference to [-π, π]
+  double diff = x - μ;
+  diff = std::fmod(diff + pi, 2.0 * pi) - pi;
+
+  // No longer PDF: f(x; μ, κ) = exp(κ * (cos(x - μ) - 1))
+  return std::exp(κ * (std::cos(diff) - 1.0));
+}
+
+template <size_t N>
+constexpr auto von_mises_input_single(double κ, double θ, double γ)
+    -> Eigen::Vector<double, N> {
+  Eigen::Vector<double, N> b;
+  for (size_t i = 0; i < N; ++i) {
+    b[i] = von_mises_peak_normalised(0, κ, angle_of<N>(i) - θ) * γ;
+  }
+
+  return b;
+}
+
+template <size_t N>
+constexpr auto von_mises_input_multi(double κ,
+                                     std::span<const double> θs,
+                                     std::span<const double> γs)
+    -> Eigen::Vector<double, N> {
+  Eigen::Vector<double, N> b = Eigen::Vector<double, N>::Zero();
+  for (size_t i = 0; i < N; ++i) {
+    for (size_t j = 0; j < θs.size(); ++j) {
+      b[i] += von_mises_peak_normalised(0, κ, angle_of<N>(i) - θs[j]) * γs[j];
+    }
+  }
+
+  return b;
 }
 
 }  // namespace ringlib

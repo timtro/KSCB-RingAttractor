@@ -1,4 +1,5 @@
 #define CATCH_CONFIG_MAIN
+#include <iostream>
 #include <numbers>
 
 #include "catch2/catch_all.hpp"
@@ -62,44 +63,130 @@ TEST_CASE("von_mises distribution properties") {
 
   SECTION("Normalization: integral over [-pi, pi] is 1 (approximate by sum)") {
     constexpr int N = 10000;
-    constexpr double mu = 0.0;
-    constexpr double kappa = 2.0;
+    constexpr double μ = 0.0;
+    constexpr double κ = 2.0;
     double sum = 0.0;
     for (int i = 0; i < N; ++i) {
       double x = -π + (2 * π) * i / N;
-      sum += von_mises(mu, kappa, x);
+      sum += von_mises(μ, κ, x);
     }
     double integral = sum * (2 * π / N);
     REQUIRE(integral == Approx(1.0).margin(1e-4));
   }
 
-  SECTION("Symmetry: von_mises(mu, kappa, x) == von_mises(-mu, kappa, -x)") {
-    constexpr double kappa = 1.5;
-    constexpr double mu = 0.7;
+  SECTION("Symmetry: von_mises(μ, κ, x) == von_mises(-μ, κ, -x)") {
+    constexpr double κ = 1.5;
+    constexpr double μ = 0.7;
     for (double x = -π; x <= π; x += 0.1) {
-      double lhs = von_mises(mu, kappa, x);
-      double rhs = von_mises(-mu, kappa, -x);
+      double lhs = von_mises(μ, κ, x);
+      double rhs = von_mises(-μ, κ, -x);
       REQUIRE(lhs == Approx(rhs).margin(1e-10));
     }
   }
 
-  SECTION("Limiting case: kappa=0 gives uniform distribution") {
-    constexpr double kappa = 0.0;
-    constexpr double mu = 1.0;  // arbitrary
+  SECTION("Limiting case: κ=0 gives uniform distribution") {
+    constexpr double κ = 0.0;
+    constexpr double μ = 1.0;  // arbitrary
     for (double x = -π; x <= π; x += 0.1) {
-      double pdf = von_mises(mu, kappa, x);
+      double pdf = von_mises(μ, κ, x);
       REQUIRE(pdf == Approx(1.0 / (2 * π)).margin(1e-10));
     }
   }
 
-  SECTION(
-      "Maximum at mean: von_mises(mu, kappa, mu) >= von_mises(mu, kappa, x) for all x") {
-    constexpr double kappa = 3.0;
-    constexpr double mu = -0.5;
-    double max_pdf = von_mises(mu, kappa, mu);
+  SECTION("Maximum at mean: von_mises(μ, κ, μ) >= von_mises(μ, κ, x) for all x") {
+    constexpr double κ = 3.0;
+    constexpr double μ = -0.5;
+    double max_pdf = von_mises(μ, κ, μ);
     for (double x = -π; x <= π; x += 0.1) {
-      double pdf = von_mises(mu, kappa, x);
+      double pdf = von_mises(μ, κ, x);
       REQUIRE(max_pdf >= pdf - 1e-12);
+    }
+  }
+}
+
+TEST_CASE("Function `von_mises_input_single` basic sanity") {
+  using ringlib::angle_of;
+  using ringlib::von_mises_input_single;
+
+  SECTION("Peak value is gamma for kappa > 0") {
+    constexpr size_t N = 32;
+    constexpr double κ = 2.0;
+    constexpr double θ = π;
+    constexpr double γ = 3.0;
+    auto b = von_mises_input_single<N>(κ, θ, γ);
+    REQUIRE(b.maxCoeff() == Approx(γ).margin(1e-10));
+  }
+
+  SECTION("Limiting case: k=0 gives flat input with height gamma") {
+    constexpr size_t N = 8;
+    constexpr double κ = 0.0;
+    constexpr double θ = 0.0;
+    constexpr double γ = 1.0;
+    auto b = von_mises_input_single<N>(κ, θ, γ);
+    for (size_t i = 0; i < N; ++i) {
+      REQUIRE(b[i] == Approx(γ).margin(1e-10));
+    }
+  }
+
+  SECTION("Maximum at mean: neuron closest to mu+theta has largest input") {
+    constexpr size_t N = 32;
+    constexpr double κ = 3.0;
+    constexpr double θ = 0.5;
+    constexpr double γ = 1.0;
+    auto b = von_mises_input_single<N>(κ, θ, γ);
+    size_t max_idx = 0;
+    b.maxCoeff(&max_idx);
+    double max_angle = angle_of<N>(max_idx);
+    double expected_angle = θ;
+    double diff = std::fmod(max_angle - expected_angle + π, 2 * π) - π;
+    REQUIRE(std::abs(diff) < (2 * π / N));
+  }
+}
+
+TEST_CASE("von_mises_input_multi properties") {
+  using ringlib::angle_of;
+  using ringlib::von_mises_input_multi;
+  constexpr double tol = 1e-10;
+
+  SECTION("Single input matches von_mises_input_single") {
+    constexpr size_t N = 16;
+    constexpr double κ = 1.0;
+    std::array<double, 1> θs = {0.5};
+    std::array<double, 1> γs = {2.0};
+    auto b_multi = von_mises_input_multi<N>(κ, std::span<const double>(θs),
+                                            std::span<const double>(γs));
+    auto b_single = ringlib::von_mises_input_single<N>(κ, θs[0], γs[0]);
+    for (size_t i = 0; i < N; ++i) {
+      REQUIRE(b_multi[i] == Approx(b_single[i]).margin(1e-10));
+    }
+  }
+
+  SECTION("Sum of two inputs equals sum of singles") {
+    constexpr size_t N = 16;
+    constexpr double κ = 1.0;
+    std::array<double, 2> θs = {π / 2, -π / 2};
+    std::array<double, 2> γs = {1.0, 2.0};
+    auto b_multi = von_mises_input_multi<N>(κ, std::span<const double>(θs),
+                                            std::span<const double>(γs));
+    auto b0 = ringlib::von_mises_input_single<N>(κ, θs[0], γs[0]);
+    auto b1 = ringlib::von_mises_input_single<N>(κ, θs[1], γs[1]);
+    for (size_t i = 0; i < N; ++i) {
+      REQUIRE(b_multi[i] == Approx(b0[i] + b1[i]).margin(1e-10));
+    }
+  }
+
+  SECTION("Limiting case: k=0 gives flat input with height sum(gammas)") {
+    constexpr size_t N = 8;
+    constexpr double κ = 0.0;
+    std::array<double, 3> θs = {0.0, 1.0, 2.0};
+    std::array<double, 3> γs = {1.0, 2.0, 3.0};
+    auto b = von_mises_input_multi<N>(κ, std::span<const double>(θs),
+                                      std::span<const double>(γs));
+    double expected = 0.0;
+    for (double g : γs)
+      expected += g;
+    for (size_t i = 0; i < N; ++i) {
+      REQUIRE(b[i] == Approx(expected).margin(1e-10));
     }
   }
 }

@@ -2,11 +2,14 @@
 #include <cmath>
 #include <mutex>
 #include <nlohmann/json.hpp>
+#include <numbers>
 #include <print>
 #include <thread>
 #include <zmq.hpp>
 
 #include "ringlib/RingAttractor.hpp"
+
+constexpr double π = std::numbers::pi;
 
 using json = nlohmann::json;
 
@@ -14,6 +17,7 @@ using RobotState = Eigen::Matrix<double, 5, 1>;
 using ControlSpace = Eigen::Matrix<double, 2, 1>;
 
 constexpr double STEP_SIZE = 0.1;
+constexpr size_t RING_SIZE = 18;
 
 std::tuple<double &, double &, double &, double &, double &> by_elements(RobotState &x) {
   return std::tie(x(0), x(1), x(2), x(3), x(4));
@@ -27,13 +31,10 @@ std::tuple<const double &, const double &, const double &, const double &, const
 auto rk4_step(const RobotState &x₀, const ControlSpace &u, double dt) -> RobotState {
   auto dxdt = [&u](const RobotState &state) -> RobotState {
     const auto &[x, y, θ, v, ω] = by_elements(state);
-    return {
-        v * std::cos(θ),  // dx/dt = v * cos(θ)
-        v * std::sin(θ),  // dy/dt = v * sin(θ)
-        ω,  // dθ/dt = ω
-        u(0),  // dv/dt (example: no linear acceleration)
-        u(1)  // dω/dt (example: no angular acceleration)
-    };
+    return {v * std::cos(θ),  // dx/dt = v * cos(θ)
+            v * std::sin(θ),  // dy/dt = v * sin(θ)
+            ω,  // dθ/dt = ω
+            u(0), u(1)};  // assert control influance
   };
 
   auto k1 = dxdt(x₀);
@@ -69,7 +70,7 @@ auto to_json(const ringlib::FeleRingAttractor<N> &attractor) -> json {
   return json{{"neurons", attractor.state().transpose().eval()}};
 }
 
-ringlib::FeleRingAttractor<18> ring_attractor(0.05, 9.0);
+ringlib::FeleRingAttractor<RING_SIZE> ring_attractor(0.05, 9.0);
 std::mutex attractor_mutex;
 std::atomic<bool> running{true};
 
@@ -79,8 +80,8 @@ void simulation_loop() {
       std::lock_guard<std::mutex> lock(attractor_mutex);
       ring_attractor.update(decltype(ring_attractor.neurons)::Zero(), STEP_SIZE);
     }
-    // Optionally sleep for a very short time to avoid 100% CPU
-    // std::this_thread::sleep_for(std::chrono::microseconds(100));
+    // Optionally sleep to throttle
+    std::this_thread::sleep_for(std::chrono::microseconds(100));
   }
 }
 
@@ -90,7 +91,7 @@ int main() {
   responder.bind("ipc:///tmp/zmq-sim.sock");
   std::println("Simulator server started on ipc:///tmp/zmq-sim.sock");
 
-  ring_attractor.update({0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+  ring_attractor.update(ringlib::von_mises_input_single<RING_SIZE>(20., π, 1.0),
                         STEP_SIZE);
 
   std::thread sim_thread(simulation_loop);
