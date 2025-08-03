@@ -132,7 +132,7 @@ constexpr auto von_mises_input_single(double κ, double θ, double γ)
     -> Eigen::Vector<double, N> {
   Eigen::Vector<double, N> b;
   for (size_t i = 0; i < N; ++i) {
-    b[i] = von_mises_peak_normalised(0, κ, angle_of<N>(i) - θ) * γ;
+    b[static_cast<int>(i)] = von_mises_peak_normalised(0, κ, angle_of<N>(i) - θ) * γ;
   }
 
   return b;
@@ -146,7 +146,8 @@ constexpr auto von_mises_input_multi(double κ,
   Eigen::Vector<double, N> b = Eigen::Vector<double, N>::Zero();
   for (size_t i = 0; i < N; ++i) {
     for (size_t j = 0; j < θs.size(); ++j) {
-      b[i] += von_mises_peak_normalised(0, κ, angle_of<N>(i) - θs[j]) * γs[j];
+      b[static_cast<int>(i)] +=
+          von_mises_peak_normalised(0, κ, angle_of<N>(i) - θs[j]) * γs[j];
     }
   }
 

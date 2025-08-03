@@ -1,5 +1,5 @@
 # vim: fdm=marker:fdc=2:fmr={{{,}}}
-cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.25)
 
 project(canopy LANGUAGES C CXX)
 
@@ -66,14 +66,17 @@ endif()
 
 # include(cmake/extras.cmake)
 
+# Conan dependencies
 find_package(spdlog REQUIRED)
-# find_package(Boost REQUIRED)
-# find_package(raylib REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(nlohmann_json REQUIRED)
 find_package(ZeroMQ REQUIRED)
 find_package(cppzmq REQUIRED)
-# find_package(glfw3 REQUIRED)
+find_package(nlohmann_json REQUIRED)
+find_package(Catch2 REQUIRED)
+find_package(imgui REQUIRED)
+find_package(implot REQUIRED)
+find_package(glfw3 REQUIRED)
+find_package(glad REQUIRED)
 
 add_subdirectory(src)
 add_subdirectory(include)
@@ -85,10 +88,10 @@ endif()
 
 # Post configuration ...................................................... {{{1
 # Copy compile commands JSON to top level for clangd.
-IF( EXISTS "${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json" )
-  EXECUTE_PROCESS( COMMAND ${CMAKE_COMMAND} -E copy_if_different
-      ${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json
-      ${CMAKE_CURRENT_SOURCE_DIR}/compile_commands.json
-   )
+if( EXISTS "${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json" )
+  execute_process(COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    ${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json
+    ${CMAKE_CURRENT_SOURCE_DIR}/compile_commands.json
+  )
 ENDIF()
 #  ........................................................................ }}}1

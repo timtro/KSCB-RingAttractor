@@ -73,7 +73,7 @@ auto to_json(const ringlib::FeleRingAttractor<N> &attractor) -> json {
   return json{{"neurons", attractor.state().transpose().eval()}};
 }
 
-ringlib::FeleRingAttractor<RING_SIZE> ring_attractor(0.5, 6.0);
+ringlib::FeleRingAttractor<RING_SIZE> ring_attractor(0.5, 1.5);
 std::mutex global_state_mutex;
 std::atomic<bool> running{true};
 
