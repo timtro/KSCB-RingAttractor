@@ -90,7 +90,7 @@ void simulation_loop() {
       b = ringlib::von_mises_input_single<RING_SIZE>(κ, θ_in, γ);
       // b = Eigen::Vector<double, RING_SIZE>::Zero();
       ring_attractor.update(b, STEP_SIZE);
-      θ_in = std::fmod(θ_in + STEP_SIZE / 50, 2.0 * π) - π;
+      θ_in = wrap_angle(θ_in + STEP_SIZE / 50);
     }
     // Optionally sleep to throttle
     std::this_thread::sleep_for(std::chrono::microseconds(100));
