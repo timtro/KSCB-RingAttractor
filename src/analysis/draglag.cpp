@@ -18,19 +18,27 @@
 
 constexpr double STEP_SIZE = 0.05;
 constexpr size_t RING_SIZE = 18;
-constexpr double γ = 8.0;
-constexpr double κ = 8.0;
-constexpr double ν = 0.10;
-constexpr double network_coupling_constant = 6;
-
 constexpr double π = std::numbers::pi;
+
+// Tunable parameters (with default values)
+struct Parameters {
+  float γ = 8.0f;  // Input gain
+  float κ = 8.0f;  // Von Mises concentration
+  float ν = 0.10f;  // Kernel parameter
+  float network_coupling_constant = 6.0f;  // Network coupling strength
+  float input_speed = 2.0f;  // Speed of input rotation
+};
 
 using RingAttractor = ringlib::FeleRingAttractor<RING_SIZE>;
 
-void update_simulation(RingAttractor &attractor, Eigen::VectorXd &input, double &θ_in) {
-  input = ringlib::von_mises_input_single<RING_SIZE>(κ, θ_in, γ);
+void update_simulation(RingAttractor &attractor,
+                       Eigen::VectorXd &input,
+                       double &θ_in,
+                       const Parameters &params) {
+  input = ringlib::von_mises_input_single<RING_SIZE>(static_cast<double>(params.κ), θ_in,
+                                                     static_cast<double>(params.γ));
   attractor.update(input, STEP_SIZE);
-  θ_in = wrap_angle(θ_in + STEP_SIZE / 2.0);
+  θ_in = wrap_angle(θ_in + STEP_SIZE * static_cast<double>(params.input_speed));
 }
 
 // Ring plot shows the ring of neurons as points and colours them by activity level.
@@ -249,6 +257,48 @@ void render_heatmap(const Eigen::VectorXd &neurons, const Eigen::VectorXd &input
   ImGui::End();
 }
 
+// Control panel for tuning parameters and network controls
+void render_control_panel(Parameters &params,
+                          RingAttractor &attractor,
+                          bool &needs_reconstruction) {
+  ImGui::Begin("Control Panel");
+
+  ImGui::Text("Tuning Parameters");
+  ImGui::Separator();
+
+  // Parameter drag inputs (scrollable/draggable textboxes)
+  bool gamma_changed =
+      ImGui::DragFloat("Input Gain (γ)", &params.γ, 0.1f, 0.1f, 20.0f, "%.2f");
+  bool kappa_changed =
+      ImGui::DragFloat("Von Mises κ", &params.κ, 0.1f, 0.1f, 20.0f, "%.2f");
+  bool nu_changed = ImGui::DragFloat("Kernel ν", &params.ν, 0.001f, 0.01f, 1.0f, "%.3f");
+  bool coupling_changed = ImGui::DragFloat("Coupling", &params.network_coupling_constant,
+                                           0.1f, 0.1f, 20.0f, "%.2f");
+  bool speed_changed =
+      ImGui::DragFloat("Input Speed", &params.input_speed, 0.1f, 0.0f, 10.0f, "%.2f");
+
+  // Mark for reconstruction if kernel parameter or coupling changed
+  if (nu_changed || coupling_changed) {
+    needs_reconstruction = true;
+  }
+
+  ImGui::Separator();
+  ImGui::Text("Network Controls");
+
+  // Zero out network button
+  if (ImGui::Button("Zero Network")) {
+    attractor.neurons.setZero();
+  }
+
+  // Reset parameters button
+  if (ImGui::Button("Reset Parameters")) {
+    params = Parameters{};  // Reset to defaults
+    needs_reconstruction = true;
+  }
+
+  ImGui::End();
+}
+
 static void glfw_error_callback(int error, const char *description) {
   fprintf(stderr, "Glfw Error %d: %s\n", error, description);
 }
@@ -306,9 +356,12 @@ auto main() -> int {
   ImGui_ImplGlfw_InitForOpenGL(window, true);
   ImGui_ImplOpenGL3_Init(glsl_version);
 
-  RingAttractor attractor(ν, network_coupling_constant);
+  Parameters params;
+  RingAttractor attractor(static_cast<double>(params.ν),
+                          static_cast<double>(params.network_coupling_constant));
   Eigen::VectorXd input = Eigen::VectorXd::Zero(RING_SIZE);
   double θ_in = 0.0;
+  bool needs_reconstruction = false;
 
   std::vector<Eigen::VectorXd> history;
   constexpr size_t MAX_HISTORY = 1000;
@@ -319,8 +372,15 @@ auto main() -> int {
     // Poll and handle events (inputs, window resize, etc.)
     glfwPollEvents();
 
+    // Reconstruct attractor if it's construction parameters are changed
+    if (needs_reconstruction) {
+      attractor = RingAttractor(static_cast<double>(params.ν),
+                                static_cast<double>(params.network_coupling_constant));
+      needs_reconstruction = false;
+    }
+
     // Update simulation
-    update_simulation(attractor, input, θ_in);
+    update_simulation(attractor, input, θ_in, params);
     history.push_back(attractor.state());
     if (history.size() > MAX_HISTORY) {
       history.erase(history.begin());
@@ -333,6 +393,7 @@ auto main() -> int {
     // Enable docking over the main viewport
     ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
 
+    render_control_panel(params, attractor, needs_reconstruction);
     render_ring_plot(attractor.state());
     render_time_series(history);
     render_heatmap(attractor.state(), input);
