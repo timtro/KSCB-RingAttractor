@@ -155,3 +155,12 @@ constexpr auto von_mises_input_multi(double κ,
 }
 
 }  // namespace ringlib
+
+constexpr auto wrap_angle(double angle) -> double {
+  // Wrap angle to [-π, π)
+  using std::numbers::pi;
+  angle = std::fmod(angle + pi, 2.0 * pi);
+  while (angle < 0)
+    angle += 2.0 * pi;
+  return angle - pi;
+}
