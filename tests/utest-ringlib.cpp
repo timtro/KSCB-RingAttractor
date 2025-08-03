@@ -141,6 +141,42 @@ TEST_CASE("Function `von_mises_input_single` basic sanity") {
     double diff = std::fmod(max_angle - expected_angle + π, 2 * π) - π;
     REQUIRE(std::abs(diff) < (2 * π / N));
   }
+
+  SECTION("Single peak property: only one global maximum should exist") {
+    constexpr size_t N = 18;  // Same as your ring size
+    constexpr double κ = 7.0;  // Same as your κ
+    constexpr double θ = π / 3;  // Arbitrary angle
+    constexpr double γ = 8.0;  // Same as your γ
+    auto b = von_mises_input_single<N>(κ, θ, γ);
+
+    // Find global maximum
+    size_t max_idx = 0;
+    double max_val = b.maxCoeff(&max_idx);
+
+    // Count how many neurons have values very close to the maximum
+    int peak_count = 0;
+    for (size_t i = 0; i < N; ++i) {
+      if (b[i] > max_val * 0.99) {  // Within 1% of maximum
+        peak_count++;
+      }
+    }
+
+    // Should have only one peak (or at most two adjacent neurons due to discretization)
+    REQUIRE(peak_count <= 2);
+
+    // Find how many distinct local maxima exist
+    std::vector<bool> is_local_max(N, false);
+    for (size_t i = 0; i < N; ++i) {
+      size_t prev = (i + N - 1) % N;
+      size_t next = (i + 1) % N;
+      if (b[i] > b[prev] && b[i] > b[next]) {
+        is_local_max[i] = true;
+      }
+    }
+
+    int local_max_count = std::count(is_local_max.begin(), is_local_max.end(), true);
+    REQUIRE(local_max_count == 1);  // Should have exactly one local maximum
+  }
 }
 
 TEST_CASE("von_mises_input_multi properties") {
