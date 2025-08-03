@@ -78,6 +78,8 @@ void render_ring_plot(const Eigen::VectorXd &neurons) {
   ImGui::End();
 }
 
+// Plot traces of neuonal activation. Traces are coloured based on their angular position
+// on the color wheel: red is 0°, cyan is 180°, etc.
 void render_time_series(const std::vector<Eigen::VectorXd> &history) {
   if (history.empty())
     return;
@@ -88,12 +90,67 @@ void render_time_series(const std::vector<Eigen::VectorXd> &history) {
   ImGui::Begin("Time Series");
 
   if (ImPlot::BeginPlot("Neuron Activation Over Time", ImVec2(-1, -1))) {
+    // Set up dynamic X-axis that follows the data
+    double x_min = 0.0;
+    double x_max = static_cast<double>(n_steps - 1);
+
+    // Always show at least a reasonable window
+    if (x_max < 100.0) {
+      x_max = 100.0;
+    }
+
+    ImPlot::SetupAxisLimits(ImAxis_X1, x_min, x_max, ImGuiCond_Always);
+
     for (size_t i = 0; i < n_neurons; ++i) {
       std::vector<double> x(n_steps), y(n_steps);
       for (size_t t = 0; t < n_steps; ++t) {
         x[t] = t;
         y[t] = history[t][i];
       }
+
+      // Color each neuron based on its angular position on the ring
+      double angle = ringlib::angle_of<RING_SIZE>(i);  // angle in radians [0, 2π)
+      double hue = angle / (2.0 * π);  // normalize to [0, 1] for hue
+
+      // Convert HSV to RGB (with full saturation and value)
+      auto hsv_to_rgb = [](double h, double s, double v) -> ImVec4 {
+        double c = v * s;
+        double x_comp = c * (1.0 - std::abs(std::fmod(h * 6.0, 2.0) - 1.0));
+        double m = v - c;
+
+        double r, g, b;
+        if (h < 1.0 / 6.0) {
+          r = c;
+          g = x_comp;
+          b = 0;
+        } else if (h < 2.0 / 6.0) {
+          r = x_comp;
+          g = c;
+          b = 0;
+        } else if (h < 3.0 / 6.0) {
+          r = 0;
+          g = c;
+          b = x_comp;
+        } else if (h < 4.0 / 6.0) {
+          r = 0;
+          g = x_comp;
+          b = c;
+        } else if (h < 5.0 / 6.0) {
+          r = x_comp;
+          g = 0;
+          b = c;
+        } else {
+          r = c;
+          g = 0;
+          b = x_comp;
+        }
+
+        return ImVec4(static_cast<float>(r + m), static_cast<float>(g + m),
+                      static_cast<float>(b + m), 1.0f);
+      };
+
+      ImVec4 color = hsv_to_rgb(hue, 0.8, 0.9);  // 80% saturation, 90% brightness
+      ImPlot::SetNextLineStyle(color);
       ImPlot::PlotLine(std::to_string(i).c_str(), x.data(), y.data(), n_steps);
     }
     ImPlot::EndPlot();
