@@ -9,20 +9,20 @@
 
 #include <Eigen/Dense>
 #include <string>
-#include <thread>
 #include <vector>
 
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include "ringlib/RingAttractor.hpp"
 
-constexpr size_t RING_SIZE = 18;
 constexpr double STEP_SIZE = 0.05;
-constexpr double γ = 6.0;
-constexpr double κ = 20.0;
-constexpr double π = 3.141592653589793;
-constexpr double ν = 0.4;
-constexpr double network_coupling_constant = 4;
+constexpr size_t RING_SIZE = 18;
+constexpr double γ = 8.0;
+constexpr double κ = 7.0;
+constexpr double ν = 0.5;
+constexpr double network_coupling_constant = 6;
+
+constexpr double π = std::numbers::pi;
 
 using RingAttractor = ringlib::FeleRingAttractor<RING_SIZE>;
 
@@ -39,33 +39,32 @@ void render_ring_plot(const Eigen::VectorXd &neurons) {
 
   ImGui::Begin("Neuron Activations");
 
-  if (ImPlot::BeginPlot("Ring Plot", ImVec2(-1, 400),
+  if (ImPlot::BeginPlot("Ring Plot", ImVec2(-1, -1),
                         ImPlotFlags_Equal | ImPlotFlags_NoLegend)) {
     ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations,
                       ImPlotAxisFlags_NoDecorations);
     ImPlot::SetupAxesLimits(-1.5, 1.5, -1.5, 1.5, ImGuiCond_Once);
 
-    const int n_neurons = neurons.size();
-    std::vector<double> x_pos(n_neurons), y_pos(n_neurons);
-    double radius = 1.0;
-    for (int i = 0; i < n_neurons; ++i) {
-      double angle = 2 * π * i / n_neurons;
+    const auto n_neurons = neurons.size();
+    std::vector<double> x_pos(RING_SIZE), y_pos(RING_SIZE);
+    for (size_t i = 0; i < RING_SIZE; ++i) {
+      double angle = ringlib::angle_of<RING_SIZE>(i);
       x_pos[i] = cos(angle);
       y_pos[i] = sin(angle);
     }
 
-    Eigen::VectorXd normalized_values = neurons;
+    auto normalized_values = neurons;
     double min_val = neurons.minCoeff();
     double max_val = neurons.maxCoeff();
     if (max_val > min_val) {
-      normalized_values = (neurons.array() - min_val) / (max_val - min_val);
+      normalized_values = ((neurons.array() - min_val) / (max_val - min_val)).sqrt();
     } else {
       normalized_values = Eigen::VectorXd::Zero(n_neurons);
     }
 
     ImPlot::PushColormap(ImPlotColormap_Viridis);
     for (int i = 0; i < n_neurons; ++i) {
-      ImVec4 color = ImPlot::GetColormapColor(static_cast<float>(normalized_values(i)));
+      ImVec4 color = ImPlot::SampleColormap(static_cast<float>(normalized_values(i)));
       ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 8, color, IMPLOT_AUTO, color);
       ImPlot::PlotScatter(("##" + std::to_string(i)).c_str(), &x_pos[i], &y_pos[i], 1);
     }
@@ -86,7 +85,7 @@ void render_time_series(const std::vector<Eigen::VectorXd> &history) {
 
   ImGui::Begin("Time Series");
 
-  if (ImPlot::BeginPlot("Neuron Activation Over Time")) {
+  if (ImPlot::BeginPlot("Neuron Activation Over Time", ImVec2(-1, -1))) {
     for (size_t i = 0; i < n_neurons; ++i) {
       std::vector<double> x(n_steps), y(n_steps);
       for (size_t t = 0; t < n_steps; ++t) {
@@ -117,12 +116,17 @@ int main() {
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
   glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
 
+  GLFWmonitor *monitor = glfwGetPrimaryMonitor();
+  const GLFWvidmode *mode = glfwGetVideoMode(monitor);
+
   // Create window with graphics context
-  GLFWwindow *window = glfwCreateWindow(1280, 720, "DragLag Analysis", NULL, NULL);
+  GLFWwindow *window =
+      glfwCreateWindow(mode->width, mode->height, "DragLag Analysis", monitor, NULL);
   if (window == NULL)
     return 1;
   glfwMakeContextCurrent(window);
   glfwSwapInterval(1);  // Enable vsync
+  // glfwMaximizeWindow(window); // not working
 
   // Initialize OpenGL loader
   if (gladLoadGL() == 0) {
@@ -179,7 +183,7 @@ int main() {
     ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
 
     // Render plots (now they handle their own windows)
-    // render_ring_plot(attractor.state());
+    render_ring_plot(attractor.state());
     render_time_series(history);
 
     ImGui::SetNextWindowPos(ImVec2(0, 450), ImGuiCond_FirstUseEver);
