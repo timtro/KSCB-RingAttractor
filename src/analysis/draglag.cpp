@@ -253,8 +253,7 @@ static void glfw_error_callback(int error, const char *description) {
   fprintf(stderr, "Glfw Error %d: %s\n", error, description);
 }
 
-int main() {
-  // Setup window
+auto main() -> int {
   glfwSetErrorCallback(glfw_error_callback);
   if (!glfwInit())
     return 1;
@@ -268,13 +267,15 @@ int main() {
   GLFWmonitor *monitor = glfwGetPrimaryMonitor();
   const GLFWvidmode *mode = glfwGetVideoMode(monitor);
 
-  // Create window with graphics context
+  // Create window with graphics context, using monitor's resolution for fullscreen. This
+  // is a bit of a hack since the glfwMaximizeWindow() function doesn't work on
+  // Wayland/Hyprland.
   GLFWwindow *window =
       glfwCreateWindow(mode->width, mode->height, "DragLag Analysis", monitor, NULL);
   if (window == NULL)
     return 1;
   glfwMakeContextCurrent(window);
-  glfwSwapInterval(1);  // Enable vsync
+  glfwSwapInterval(1);  // Enable vsync for smooth rendering
   // glfwMaximizeWindow(window); // not working
 
   // Initialize OpenGL loader
@@ -283,7 +284,7 @@ int main() {
     return 1;
   }
 
-  // Setup Dear ImGui context
+  // ImGui and ImPlot constext setup.
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
   ImPlot::CreateContext();
@@ -295,7 +296,7 @@ int main() {
       ImGuiConfigFlags_ViewportsEnable;  // Enable Multi-Viewport / Platform Windows
 
   // Setup DPI scaling
-  float scale_factor = 1.6f;  // Your preferred scale factor
+  float scale_factor = 1.6f;
   io.FontGlobalScale = scale_factor;
 
   // Setup Dear ImGui style
@@ -310,7 +311,8 @@ int main() {
   double θ_in = 0.0;
 
   std::vector<Eigen::VectorXd> history;
-  history.reserve(1000);
+  constexpr size_t MAX_HISTORY = 1000;
+  history.reserve(MAX_HISTORY);
 
   // Main loop
   while (!glfwWindowShouldClose(window)) {
@@ -320,7 +322,7 @@ int main() {
     // Update simulation
     update_simulation(attractor, input, θ_in);
     history.push_back(attractor.state());
-    if (history.size() > 1000) {
+    if (history.size() > MAX_HISTORY) {
       history.erase(history.begin());
     }
 
@@ -331,9 +333,9 @@ int main() {
     // Enable docking over the main viewport
     ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
 
-    // Render plots (now they handle their own windows)
     render_ring_plot(attractor.state());
     render_time_series(history);
+    render_heatmap(attractor.state(), input);
 
     ImGui::SetNextWindowPos(ImVec2(0, 450), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(400, 270), ImGuiCond_FirstUseEver);
@@ -352,6 +354,9 @@ int main() {
     glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
     glClear(GL_COLOR_BUFFER_BIT);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+    // Force GPU synchronization (potential fix for visual artifacts)
+    glFinish();
 
     // Update and Render additional Platform Windows
     if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
