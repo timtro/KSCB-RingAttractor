@@ -21,6 +21,8 @@ constexpr double STEP_SIZE = 0.05;
 constexpr size_t RING_SIZE = 18;
 constexpr double γ = 2.0;
 constexpr double κ = 20.0;
+constexpr double ν = 0.5;
+constexpr double network_coupling_constant = 1.5;
 
 std::tuple<double &, double &, double &, double &, double &> by_elements(RobotState &x) {
   return std::tie(x(0), x(1), x(2), x(3), x(4));
@@ -73,7 +75,7 @@ auto to_json(const ringlib::FeleRingAttractor<N> &attractor) -> json {
   return json{{"neurons", attractor.state().transpose().eval()}};
 }
 
-ringlib::FeleRingAttractor<RING_SIZE> ring_attractor(0.5, 1.5);
+ringlib::FeleRingAttractor<RING_SIZE> ring_attractor(ν, network_coupling_constant);
 std::mutex global_state_mutex;
 std::atomic<bool> running{true};
 
