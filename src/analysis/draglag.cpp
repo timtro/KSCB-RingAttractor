@@ -159,6 +159,96 @@ void render_time_series(const std::vector<Eigen::VectorXd> &history) {
   ImGui::End();
 }
 
+// Neuron activity and input signals are compared as quantitatively annotated heatmaps.
+void render_heatmap(const Eigen::VectorXd &neurons, const Eigen::VectorXd &input) {
+  if (neurons.size() == 0 || input.size() == 0) {
+    return;
+  }
+
+  ImGui::Begin("Neural Activity Heatmap");
+
+  // Create heatmap data: 2 rows x RING_SIZE columns
+  // Without ColMajor flag, data should be laid out row by row
+  float heatmap_data[2 * RING_SIZE];
+
+  // Normalize each row independently for better visibility
+  //
+  // Row 0: von Mises input vector (normalized)
+  double input_min = input.minCoeff();
+  double input_max = input.maxCoeff();
+  double input_range = input_max - input_min;
+  for (size_t i = 0; i < RING_SIZE; ++i) {
+    if (input_range > 0) {
+      heatmap_data[i] = static_cast<float>((input[i] - input_min) / input_range);
+    } else {
+      heatmap_data[i] = 0.0f;
+    }
+  }
+
+  // Row 1: ring attractor state (normalized)
+  double neurons_min = neurons.minCoeff();
+  double neurons_max = neurons.maxCoeff();
+  double neurons_range = neurons_max - neurons_min;
+  for (size_t i = 0; i < RING_SIZE; ++i) {
+    if (neurons_range > 0) {
+      heatmap_data[RING_SIZE + i] =
+          static_cast<float>((neurons[i] - neurons_min) / neurons_range);
+    } else {
+      heatmap_data[RING_SIZE + i] = 0.0f;
+    }
+  }
+
+  // Use [0, 1] range for colormap since both rows are now normalized
+  float scale_min = 0.0f;
+  float scale_max = 1.0f;
+
+  static const char *row_labels[] = {"Input", "Neurons"};
+
+  static std::vector<std::string> col_label_strings;
+  static std::vector<const char *> col_labels;
+  static bool labels_initialized = false;
+
+  if (!labels_initialized) {
+    col_label_strings.reserve(RING_SIZE);
+    col_labels.reserve(RING_SIZE);
+    for (size_t i = 0; i < RING_SIZE; ++i) {
+      col_label_strings.push_back(std::to_string(i));
+      col_labels.push_back(col_label_strings.back().c_str());
+    }
+    labels_initialized = true;
+  }
+
+  if (ImPlot::BeginPlot("Neural Activity Heatmap", ImVec2(-1, -1),
+                        ImPlotFlags_NoLegend | ImPlotFlags_NoMouseText)) {
+
+    // Setup axes with appropriate flags
+    ImPlotAxisFlags axes_flags =
+        ImPlotAxisFlags_Lock | ImPlotAxisFlags_NoGridLines | ImPlotAxisFlags_NoTickMarks;
+    ImPlot::SetupAxes(nullptr, nullptr, axes_flags, axes_flags);
+
+    // Setup axis ticks and labels
+    ImPlot::SetupAxisTicks(ImAxis_X1, 0 + 1.0 / (2 * RING_SIZE),
+                           1 - 1.0 / (2 * RING_SIZE), RING_SIZE, col_labels.data());
+    ImPlot::SetupAxisTicks(ImAxis_Y1, 1 - 1.0 / 4.0, 0 + 1.0 / 4.0, 2, row_labels);
+
+    // Use Viridis colormap
+    ImPlot::PushColormap(ImPlotColormap_Viridis);
+
+    // Plot heatmap
+    ImPlot::PlotHeatmap("##heatmap", heatmap_data, 2, RING_SIZE, scale_min, scale_max,
+                        "%.3f", ImPlotPoint(0, 0), ImPlotPoint(1, 1));
+
+    ImPlot::PopColormap();
+    ImPlot::EndPlot();
+  }
+
+  // Add colormap scale on the side
+  ImGui::SameLine();
+  ImPlot::ColormapScale("##HeatScale", scale_min, scale_max, ImVec2(60, -1));
+
+  ImGui::End();
+}
+
 static void glfw_error_callback(int error, const char *description) {
   fprintf(stderr, "Glfw Error %d: %s\n", error, description);
 }
