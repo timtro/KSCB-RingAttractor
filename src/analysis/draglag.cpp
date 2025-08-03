@@ -8,6 +8,7 @@
 #include <stdio.h>
 
 #include <Eigen/Dense>
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -18,8 +19,8 @@
 constexpr double STEP_SIZE = 0.05;
 constexpr size_t RING_SIZE = 18;
 constexpr double γ = 8.0;
-constexpr double κ = 7.0;
-constexpr double ν = 0.5;
+constexpr double κ = 8.0;
+constexpr double ν = 0.10;
 constexpr double network_coupling_constant = 6;
 
 constexpr double π = std::numbers::pi;
@@ -29,9 +30,10 @@ using RingAttractor = ringlib::FeleRingAttractor<RING_SIZE>;
 void update_simulation(RingAttractor &attractor, Eigen::VectorXd &input, double &θ_in) {
   input = ringlib::von_mises_input_single<RING_SIZE>(κ, θ_in, γ);
   attractor.update(input, STEP_SIZE);
-  θ_in = std::fmod(θ_in + STEP_SIZE / 50, 2.0 * π) - π;
+  θ_in = wrap_angle(θ_in + STEP_SIZE / 2.0);
 }
 
+// Ring plot shows the ring of neurons as points and colours them by activity level.
 void render_ring_plot(const Eigen::VectorXd &neurons) {
   if (neurons.size() == 0) {
     return;
