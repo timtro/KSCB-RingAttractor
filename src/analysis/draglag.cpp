@@ -24,10 +24,13 @@ constexpr double π = std::numbers::pi;
 using RingAttractor = ringlib::FeleRingAttractor<RING_SIZE>;
 
 struct Parameters {
-  float γ = 8.0f;  // Input gain
-  float κ = 8.0f;  // Von Mises concentration
-  float ν = 0.10f;  // Kernel parameter
-  float network_coupling_constant = 6.0f;  // Network coupling strength
+  float γ = 2.0f;  // Input gain
+  float κ = 20.0f;  // Von Mises concentration
+  float ν = 0.5f;  // Kernel parameter
+  // float network_coupling_constant = 3.f;  // Network coupling strength
+  float network_coupling_constant =
+      2.6f;  // Network coupling strength
+             // 2.4 - unstable, 2.5 - marginally stable, 2.6 - stable
   float input_speed = 2.0f;  // Speed of input rotation
   bool use_input = true;  // Toggle between von Mises input and zero input
 };
