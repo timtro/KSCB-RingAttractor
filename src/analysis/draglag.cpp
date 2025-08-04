@@ -29,16 +29,22 @@ struct Parameters {
   float ν = 0.10f;  // Kernel parameter
   float network_coupling_constant = 6.0f;  // Network coupling strength
   float input_speed = 2.0f;  // Speed of input rotation
+  bool use_input = true;  // Toggle between von Mises input and zero input
 };
 
 void update_simulation(RingAttractor &attractor,
                        Eigen::VectorXd &input,
                        double &θ_in,
                        const Parameters &params) {
-  input = ringlib::von_mises_input_single<RING_SIZE>(static_cast<double>(params.κ), θ_in,
-                                                     static_cast<double>(params.γ));
+  if (params.use_input) {
+    input = ringlib::von_mises_input_single<RING_SIZE>(
+        static_cast<double>(params.κ), θ_in, static_cast<double>(params.γ));
+    θ_in = wrap_angle(θ_in + STEP_SIZE * static_cast<double>(params.input_speed));
+  } else {
+    input = Eigen::VectorXd::Zero(RING_SIZE);
+    // Don't update θ_in when input is disabled
+  }
   attractor.update(input, STEP_SIZE);
-  θ_in = wrap_angle(θ_in + STEP_SIZE * static_cast<double>(params.input_speed));
 }
 
 // Ring plot shows the ring of neurons as points and colours them by activity level.
@@ -313,7 +319,9 @@ void render_control_panel(Parameters &params,
   ImGui::Text("Tuning Parameters");
   ImGui::Separator();
 
-  // Parameter drag inputs (scrollable/draggable textboxes)
+  ImGui::Checkbox("Oscillating Input", &params.use_input);
+  ImGui::Separator();
+
   bool gamma_changed =
       ImGui::DragFloat("Input Gain (γ)", &params.γ, 0.1f, 0.1f, 20.0f, "%.2f");
   bool kappa_changed =
