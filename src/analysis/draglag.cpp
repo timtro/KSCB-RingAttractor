@@ -21,8 +21,8 @@
 constexpr double STEP_SIZE = 0.05;
 constexpr size_t RING_SIZE = 18;
 constexpr double π = std::numbers::pi;
+using RingAttractor = ringlib::FeleRingAttractor<RING_SIZE>;
 
-// Tunable parameters (with default values)
 struct Parameters {
   float γ = 8.0f;  // Input gain
   float κ = 8.0f;  // Von Mises concentration
@@ -30,57 +30,6 @@ struct Parameters {
   float network_coupling_constant = 6.0f;  // Network coupling strength
   float input_speed = 2.0f;  // Speed of input rotation
 };
-
-using RingAttractor = ringlib::FeleRingAttractor<RING_SIZE>;
-
-void MyPlotStyle() {
-
-  ImPlotStyle &style = ImPlot::GetStyle();
-
-  ImVec4 *colors = style.Colors;
-  colors[ImPlotCol_Line] = IMPLOT_AUTO_COL;
-  colors[ImPlotCol_Fill] = IMPLOT_AUTO_COL;
-  colors[ImPlotCol_MarkerOutline] = IMPLOT_AUTO_COL;
-  colors[ImPlotCol_MarkerFill] = IMPLOT_AUTO_COL;
-  colors[ImPlotCol_ErrorBar] = ImVec4(0.00f, 0.00f, 0.00f, 1.00f);
-  colors[ImPlotCol_FrameBg] = ImVec4(0.00f, 0.00f, 0.00f, 1.00f);
-  colors[ImPlotCol_PlotBg] = ImVec4(0.f, 0.f, 0.f, 1.00f);
-  colors[ImPlotCol_PlotBorder] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
-  colors[ImPlotCol_LegendBg] = ImVec4(0.92f, 0.92f, 0.95f, 1.00f);
-  colors[ImPlotCol_LegendBorder] = ImVec4(0.80f, 0.81f, 0.85f, 1.00f);
-  colors[ImPlotCol_LegendText] = ImVec4(0.00f, 0.00f, 0.00f, 1.00f);
-  colors[ImPlotCol_TitleText] = ImVec4(0.00f, 0.00f, 0.00f, 1.00f);
-  colors[ImPlotCol_InlayText] = ImVec4(0.00f, 0.00f, 0.00f, 1.00f);
-  colors[ImPlotCol_AxisText] = ImVec4(0.00f, 0.00f, 0.00f, 1.00f);
-  colors[ImPlotCol_AxisGrid] = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
-  colors[ImPlotCol_AxisBgHovered] = ImVec4(0.92f, 0.92f, 0.95f, 1.00f);
-  colors[ImPlotCol_AxisBgActive] = ImVec4(0.92f, 0.92f, 0.95f, 0.75f);
-  colors[ImPlotCol_Selection] = ImVec4(1.00f, 0.65f, 0.00f, 1.00f);
-  colors[ImPlotCol_Crosshairs] = ImVec4(0.23f, 0.10f, 0.64f, 0.50f);
-
-  style.LineWeight = 1.5;
-  style.Marker = ImPlotMarker_None;
-  style.MarkerSize = 4;
-  style.MarkerWeight = 1;
-  style.FillAlpha = 1.0f;
-  style.ErrorBarSize = 5;
-  style.ErrorBarWeight = 1.5f;
-  style.DigitalBitHeight = 8;
-  style.DigitalBitGap = 4;
-  style.PlotBorderSize = 0;
-  style.MinorAlpha = 1.0f;
-  style.MajorTickLen = ImVec2(0, 0);
-  style.MinorTickLen = ImVec2(0, 0);
-  style.MajorTickSize = ImVec2(0, 0);
-  style.MinorTickSize = ImVec2(0, 0);
-  style.MajorGridSize = ImVec2(1.2f, 1.2f);
-  style.MinorGridSize = ImVec2(1.2f, 1.2f);
-  style.PlotPadding = ImVec2(12, 12);
-  style.LabelPadding = ImVec2(5, 5);
-  style.LegendPadding = ImVec2(5, 5);
-  style.MousePosPadding = ImVec2(5, 5);
-  style.PlotMinSize = ImVec2(300, 225);
-}
 
 void update_simulation(RingAttractor &attractor,
                        Eigen::VectorXd &input,
@@ -90,14 +39,6 @@ void update_simulation(RingAttractor &attractor,
                                                      static_cast<double>(params.γ));
   attractor.update(input, STEP_SIZE);
   θ_in = wrap_angle(θ_in + STEP_SIZE * static_cast<double>(params.input_speed));
-}
-
-// Calculate root mean square error between two angles, handling circular wraparound
-double angle_rmse(double angle1, double angle2) {
-  double diff = angle1 - angle2;
-  // Wrap difference to [-π, π]
-  diff = wrap_angle(diff);
-  return std::sqrt(diff * diff);  // RMSE = sqrt(MSE) for single sample
 }
 
 // Ring plot shows the ring of neurons as points and colours them by activity level.
@@ -132,8 +73,9 @@ void render_ring_plot(const Eigen::VectorXd &neurons) {
     }
 
     ImPlot::PushColormap(ImPlotColormap_Viridis);
-    for (int i = 0; i < n_neurons; ++i) {
-      ImVec4 color = ImPlot::SampleColormap(static_cast<float>(normalized_values(i)));
+    for (size_t i = 0; i < static_cast<size_t>(n_neurons); ++i) {
+      ImVec4 color = ImPlot::SampleColormap(
+          static_cast<float>(normalized_values(static_cast<int>(i))));
       ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 8, color, IMPLOT_AUTO, color);
       ImPlot::PlotScatter(("##" + std::to_string(i)).c_str(), &x_pos[i], &y_pos[i], 1);
     }
@@ -152,7 +94,7 @@ void render_time_series(const std::vector<Eigen::VectorXd> &history) {
     return;
 
   size_t n_steps = history.size();
-  size_t n_neurons = history[0].size();
+  size_t n_neurons = static_cast<size_t>(history[0].size());
 
   ImGui::Begin("Time Series");
 
@@ -171,8 +113,8 @@ void render_time_series(const std::vector<Eigen::VectorXd> &history) {
     for (size_t i = 0; i < n_neurons; ++i) {
       std::vector<double> x(n_steps), y(n_steps);
       for (size_t t = 0; t < n_steps; ++t) {
-        x[t] = t;
-        y[t] = history[t][i];
+        x[t] = static_cast<double>(t);
+        y[t] = history[t][static_cast<int>(i)];
       }
 
       // Color each neuron based on its angular position on the ring
@@ -218,7 +160,8 @@ void render_time_series(const std::vector<Eigen::VectorXd> &history) {
 
       ImVec4 color = hsv_to_rgb(hue, 0.8, 0.9);  // 80% saturation, 90% brightness
       ImPlot::SetNextLineStyle(color);
-      ImPlot::PlotLine(std::to_string(i).c_str(), x.data(), y.data(), n_steps);
+      ImPlot::PlotLine(std::to_string(i).c_str(), x.data(), y.data(),
+                       static_cast<int>(n_steps));
     }
     ImPlot::EndPlot();
   }
@@ -235,7 +178,8 @@ void render_mse_plot(const std::vector<double> &mse_history) {
 
   ImGui::Begin("Heading RMSE");
 
-  if (ImPlot::BeginPlot("Root Mean Square Error: Heading vs Input Angle", ImVec2(-1, -1))) {
+  if (ImPlot::BeginPlot("Root Mean Square Error: Heading vs Input Angle",
+                        ImVec2(-1, -1))) {
     // Set up dynamic X-axis that follows the data
     double x_min = 0.0;
     double x_max = static_cast<double>(n_steps - 1);
@@ -250,12 +194,13 @@ void render_mse_plot(const std::vector<double> &mse_history) {
 
     std::vector<double> x(n_steps);
     for (size_t t = 0; t < n_steps; ++t) {
-      x[t] = t;
+      x[t] = static_cast<double>(t);
     }
 
     // Plot RMSE with a distinctive color
     ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.4f, 0.2f, 1.0f), 2.0f);  // Orange line
-    ImPlot::PlotLine("RMSE (radians)", x.data(), mse_history.data(), n_steps);
+    ImPlot::PlotLine("RMSE (radians)", x.data(), mse_history.data(),
+                     static_cast<int>(n_steps));
 
     ImPlot::EndPlot();
   }
@@ -283,7 +228,8 @@ void render_heatmap(const Eigen::VectorXd &neurons, const Eigen::VectorXd &input
   double input_range = input_max - input_min;
   for (size_t i = 0; i < RING_SIZE; ++i) {
     if (input_range > 0) {
-      heatmap_data[i] = static_cast<float>((input[i] - input_min) / input_range);
+      heatmap_data[i] =
+          static_cast<float>((input[static_cast<int>(i)] - input_min) / input_range);
     } else {
       heatmap_data[i] = 0.0f;
     }
@@ -295,16 +241,16 @@ void render_heatmap(const Eigen::VectorXd &neurons, const Eigen::VectorXd &input
   double neurons_range = neurons_max - neurons_min;
   for (size_t i = 0; i < RING_SIZE; ++i) {
     if (neurons_range > 0) {
-      heatmap_data[RING_SIZE + i] =
-          static_cast<float>((neurons[i] - neurons_min) / neurons_range);
+      heatmap_data[RING_SIZE + i] = static_cast<float>(
+          (neurons[static_cast<int>(i)] - neurons_min) / neurons_range);
     } else {
       heatmap_data[RING_SIZE + i] = 0.0f;
     }
   }
 
   // Use [0, 1] range for colormap since both rows are now normalized
-  float scale_min = 0.0f;
-  float scale_max = 1.0f;
+  double scale_min = 0.0;
+  double scale_max = 1.0;
 
   static const char *row_labels[] = {"Input", "Neurons"};
 
@@ -356,10 +302,12 @@ void render_heatmap(const Eigen::VectorXd &neurons, const Eigen::VectorXd &input
 // Control panel for tuning parameters and network controls
 void render_control_panel(Parameters &params,
                           RingAttractor &attractor,
-                          bool &needs_reconstruction,
-                          std::vector<Eigen::VectorXd> &history,
+                          bool &ring_attractor_needs_reconstruction,
+                          std::vector<Eigen::VectorXd> &neuron_history,
                           std::vector<double> &mse_history,
-                          bool &is_paused) {
+                          bool &is_paused,
+                          double &sum_squared_errors,
+                          size_t &error_count) {
   ImGui::Begin("Control Panel");
 
   ImGui::Text("Tuning Parameters");
@@ -376,15 +324,14 @@ void render_control_panel(Parameters &params,
   bool speed_changed =
       ImGui::DragFloat("Input Speed", &params.input_speed, 0.1f, 0.0f, 10.0f, "%.2f");
 
-  // Mark for reconstruction if kernel parameter or coupling changed
+  // If ν or coupling parameter change, the ring attractor needs reconstruction.
   if (nu_changed || coupling_changed) {
-    needs_reconstruction = true;
+    ring_attractor_needs_reconstruction = true;
   }
 
   ImGui::Separator();
   ImGui::Text("Simulation Controls");
 
-  // Pause/Resume button
   if (is_paused) {
     if (ImGui::Button("Resume (Space)")) {
       is_paused = false;
@@ -398,19 +345,21 @@ void render_control_panel(Parameters &params,
   ImGui::Separator();
   ImGui::Text("Network Controls");
 
-  // Zero out network button
   if (ImGui::Button("Zero Network")) {
     attractor.neurons.setZero();
-    history.clear();  // Clear neuron history
-    mse_history.clear();  // Clear MSE history
+    neuron_history.clear();  // Clear neuron history
+    mse_history.clear();  // Clear RMSE history
+    sum_squared_errors = 0.0;  // Reset RMSE accumulation
+    error_count = 0;
   }
 
-  // Reset parameters button
   if (ImGui::Button("Reset Parameters")) {
-    params = Parameters{};  // Reset to defaults
-    needs_reconstruction = true;
-    history.clear();  // Clear neuron history
-    mse_history.clear();  // Clear MSE history
+    params = Parameters{};
+    ring_attractor_needs_reconstruction = true;
+    neuron_history.clear();
+    mse_history.clear();
+    sum_squared_errors = 0.0;  // Reset RMSE accumulation
+    error_count = 0;
   }
 
   ImGui::End();
@@ -421,7 +370,6 @@ static void glfw_error_callback(int error, const char *description) {
 }
 
 auto main() -> int {
-  // Set up logging
   spdlog::set_level(spdlog::level::info);
   spdlog::info("Starting DragLag Analysis application");
 
@@ -429,7 +377,6 @@ auto main() -> int {
   std::filesystem::path cwd = std::filesystem::current_path();
   spdlog::info("Current working directory: {}", cwd.string());
 
-  // Check if font file exists
   std::filesystem::path font_path = "../assets/DejaVuSans.ttf";
   bool font_exists = std::filesystem::exists(font_path);
   spdlog::info("Font file exists at {}: {}", font_path.string(), font_exists);
@@ -463,7 +410,6 @@ auto main() -> int {
   glfwSwapInterval(1);  // Enable vsync for smooth rendering
   // glfwMaximizeWindow(window); // not working
 
-  // Initialize OpenGL loader
   if (gladLoadGL() == 0) {
     fprintf(stderr, "Failed to initialize OpenGL loader!\n");
     return 1;
@@ -480,9 +426,9 @@ auto main() -> int {
   io.ConfigFlags |=
       ImGuiConfigFlags_ViewportsEnable;  // Enable Multi-Viewport / Platform Windows
 
-  // Setup DPI scaling
-  float scale_factor = 1.6f;
-  io.FontGlobalScale = scale_factor;
+  // DPI scaling
+  float gui_scale_factor = 1.6f;
+  io.FontGlobalScale = gui_scale_factor;
 
   // Load font with Greek character support
   spdlog::info("Attempting to load font from: ../assets/DejaVuSans.ttf");
@@ -491,9 +437,9 @@ auto main() -> int {
   config.MergeMode = false;
 
   // Load the main font with default Latin characters
-  // Path is relative to executable location (build/)
+  // Path is relative to executable location (build/) so run from there.
   ImFont *font = io.Fonts->AddFontFromFileTTF("../assets/DejaVuSans.ttf",
-                                              9.0f * scale_factor, &config);
+                                              9.0f * gui_scale_factor, &config);
 
   if (font == nullptr) {
     spdlog::error("Failed to load main font from ../assets/DejaVuSans.ttf");
@@ -510,7 +456,7 @@ auto main() -> int {
       0,
   };
   ImFont *greek_font = io.Fonts->AddFontFromFileTTF(
-      "../assets/DejaVuSans.ttf", 9.0f * scale_factor, &config, greek_ranges);
+      "../assets/DejaVuSans.ttf", 9.0f * gui_scale_factor, &config, greek_ranges);
 
   if (greek_font == nullptr) {
     spdlog::error("Failed to load Greek character range from ../assets/DejaVuSans.ttf");
@@ -531,10 +477,10 @@ auto main() -> int {
   // Setup Dear ImGui style
   ImGui::StyleColorsDark();
 
-  // Setup Platform/Renderer backends
   ImGui_ImplGlfw_InitForOpenGL(window, true);
   ImGui_ImplOpenGL3_Init(glsl_version);
 
+  // Setup simulation and GUI state
   Parameters params;
   RingAttractor attractor(static_cast<double>(params.ν),
                           static_cast<double>(params.network_coupling_constant));
@@ -549,9 +495,11 @@ auto main() -> int {
   history.reserve(MAX_HISTORY);
   mse_history.reserve(MAX_HISTORY);
 
-  // Main loop
+  // RMSE calculation variables
+  double sum_squared_errors = 0.0;
+  size_t error_count = 0;
+
   while (!glfwWindowShouldClose(window)) {
-    // Poll and handle events (inputs, window resize, etc.)
     glfwPollEvents();
 
     // Reconstruct attractor if it's construction parameters are changed
@@ -561,7 +509,6 @@ auto main() -> int {
       needs_reconstruction = false;
     }
 
-    // Update simulation only if not paused
     if (!is_paused) {
       update_simulation(attractor, input, θ_in, params);
       history.push_back(attractor.state());
@@ -569,12 +516,29 @@ auto main() -> int {
         history.erase(history.begin());
       }
 
-      // Calculate and store RMSE between heading and input angle
+      // Calculate and accumulate squared angular error for RMSE
+      auto angle_error = [](double angle1, double angle2) {
+        double diff = angle1 - angle2;
+        // Wrap difference to [-π, π]
+        diff = wrap_angle(diff);
+        return diff;  // Return signed difference
+      };
+
       double heading = attractor.heading();
-      double rmse = angle_rmse(heading, θ_in);
-      mse_history.push_back(rmse);
+      double error = angle_error(heading, θ_in);
+      double squared_error = error * error;
+
+      // Accumulate for RMSE calculation
+      sum_squared_errors += squared_error;
+      error_count++;
+
+      // Calculate current RMSE and store for plotting
+      double current_rmse = std::sqrt(sum_squared_errors / error_count);
+      mse_history.push_back(current_rmse);
+
       if (mse_history.size() > MAX_HISTORY) {
         mse_history.erase(mse_history.begin());
+        // Don't reset accumulation - we want running RMSE over all time
       }
     }
 
@@ -582,10 +546,10 @@ auto main() -> int {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    // Handle spacebar for pause/unpause (after ImGui frame begins)
+    // Space-bar to pause
     static bool space_pressed = false;
     bool space_key_down = ImGui::IsKeyDown(ImGuiKey_Space);
-    
+
     if (space_key_down && !space_pressed) {
       is_paused = !is_paused;
       space_pressed = true;
@@ -596,8 +560,8 @@ auto main() -> int {
     // Enable docking over the main viewport
     ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
 
-    // MyPlotStyle();
-    render_control_panel(params, attractor, needs_reconstruction, history, mse_history, is_paused);
+    render_control_panel(params, attractor, needs_reconstruction, history, mse_history,
+                         is_paused, sum_squared_errors, error_count);
     render_ring_plot(attractor.state());
     render_time_series(history);
     render_mse_plot(mse_history);
@@ -607,8 +571,8 @@ auto main() -> int {
     ImGui::SetNextWindowSize(ImVec2(400, 270), ImGuiCond_FirstUseEver);
     ImGui::Begin("State Display");
     ImGui::Text("Neuron States:");
-    for (size_t i = 0; i < attractor.state().size(); ++i) {
-      ImGui::Text("Neuron %zu: %.4f", i, attractor.state()[i]);
+    for (size_t i = 0; i < static_cast<size_t>(attractor.state().size()); ++i) {
+      ImGui::Text("Neuron %zu: %.4f", i, attractor.state()[static_cast<int>(i)]);
     }
     ImGui::End();
 
