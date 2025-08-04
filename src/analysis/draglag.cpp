@@ -5,10 +5,12 @@
 #include <GLFW/glfw3.h>
 #include <imgui.h>
 #include <implot.h>
+#include <spdlog/spdlog.h>
 #include <stdio.h>
 
 #include <Eigen/Dense>
 #include <algorithm>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -304,6 +306,24 @@ static void glfw_error_callback(int error, const char *description) {
 }
 
 auto main() -> int {
+  // Set up logging
+  spdlog::set_level(spdlog::level::info);
+  spdlog::info("Starting DragLag Analysis application");
+
+  // Log current working directory for debugging font path issues
+  std::filesystem::path cwd = std::filesystem::current_path();
+  spdlog::info("Current working directory: {}", cwd.string());
+
+  // Check if font file exists
+  std::filesystem::path font_path = "../assets/DejaVuSans.ttf";
+  bool font_exists = std::filesystem::exists(font_path);
+  spdlog::info("Font file exists at {}: {}", font_path.string(), font_exists);
+
+  if (font_exists) {
+    auto font_size = std::filesystem::file_size(font_path);
+    spdlog::info("Font file size: {} bytes", font_size);
+  }
+
   glfwSetErrorCallback(glfw_error_callback);
   if (!glfwInit())
     return 1;
@@ -348,6 +368,51 @@ auto main() -> int {
   // Setup DPI scaling
   float scale_factor = 1.6f;
   io.FontGlobalScale = scale_factor;
+
+  // Load font with Greek character support
+  spdlog::info("Attempting to load font from: ../assets/DejaVuSans.ttf");
+
+  ImFontConfig config;
+  config.MergeMode = false;
+
+  // Load the main font with default Latin characters
+  // Path is relative to executable location (build/)
+  ImFont *font = io.Fonts->AddFontFromFileTTF("../assets/DejaVuSans.ttf",
+                                              9.0f * scale_factor, &config);
+
+  if (font == nullptr) {
+    spdlog::error("Failed to load main font from ../assets/DejaVuSans.ttf");
+    spdlog::info("Falling back to default font");
+  } else {
+    spdlog::info("Successfully loaded main font");
+  }
+
+  // Add Greek character range to the same font
+  config.MergeMode = true;  // Merge with the previous font
+  static const ImWchar greek_ranges[] = {
+      0x0370,
+      0x03FF,  // Greek and Coptic block
+      0,
+  };
+  ImFont *greek_font = io.Fonts->AddFontFromFileTTF(
+      "../assets/DejaVuSans.ttf", 9.0f * scale_factor, &config, greek_ranges);
+
+  if (greek_font == nullptr) {
+    spdlog::error("Failed to load Greek character range from ../assets/DejaVuSans.ttf");
+  } else {
+    spdlog::info("Successfully loaded Greek character range");
+  }
+
+  // Build font atlas
+  bool font_build_success = io.Fonts->Build();
+  spdlog::info("Font atlas build result: {}", font_build_success ? "success" : "failed");
+
+  // Check if we have the default font at least
+  if (io.Fonts->Fonts.Size == 0) {
+    spdlog::error("No fonts available after loading attempt");
+  } else {
+    spdlog::info("Total fonts loaded: {}", io.Fonts->Fonts.Size);
+  }
 
   // Setup Dear ImGui style
   ImGui::StyleColorsDark();

@@ -22,5 +22,6 @@ target_link_libraries(draglag
     implot::implot
     glfw
     glad::glad
+    spdlog::spdlog
 )
 
