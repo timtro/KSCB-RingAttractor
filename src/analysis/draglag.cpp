@@ -92,6 +92,14 @@ void update_simulation(RingAttractor &attractor,
   θ_in = wrap_angle(θ_in + STEP_SIZE * static_cast<double>(params.input_speed));
 }
 
+// Calculate root mean square error between two angles, handling circular wraparound
+double angle_rmse(double angle1, double angle2) {
+  double diff = angle1 - angle2;
+  // Wrap difference to [-π, π]
+  diff = wrap_angle(diff);
+  return std::sqrt(diff * diff);  // RMSE = sqrt(MSE) for single sample
+}
+
 // Ring plot shows the ring of neurons as points and colours them by activity level.
 void render_ring_plot(const Eigen::VectorXd &neurons) {
   if (neurons.size() == 0) {
@@ -218,6 +226,43 @@ void render_time_series(const std::vector<Eigen::VectorXd> &history) {
   ImGui::End();
 }
 
+// Plot RMSE between ring attractor heading and input angle over time
+void render_mse_plot(const std::vector<double> &mse_history) {
+  if (mse_history.empty())
+    return;
+
+  size_t n_steps = mse_history.size();
+
+  ImGui::Begin("Heading RMSE");
+
+  if (ImPlot::BeginPlot("Root Mean Square Error: Heading vs Input Angle", ImVec2(-1, -1))) {
+    // Set up dynamic X-axis that follows the data
+    double x_min = 0.0;
+    double x_max = static_cast<double>(n_steps - 1);
+
+    // Always show at least a reasonable window
+    if (x_max < 100.0) {
+      x_max = 100.0;
+    }
+
+    ImPlot::SetupAxisLimits(ImAxis_X1, x_min, x_max, ImGuiCond_Always);
+    ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, ImPlotCond_Once);  // RMSE is always >= 0
+
+    std::vector<double> x(n_steps);
+    for (size_t t = 0; t < n_steps; ++t) {
+      x[t] = t;
+    }
+
+    // Plot RMSE with a distinctive color
+    ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.4f, 0.2f, 1.0f), 2.0f);  // Orange line
+    ImPlot::PlotLine("RMSE (radians)", x.data(), mse_history.data(), n_steps);
+
+    ImPlot::EndPlot();
+  }
+
+  ImGui::End();
+}
+
 // Neuron activity and input signals are compared as quantitatively annotated heatmaps.
 void render_heatmap(const Eigen::VectorXd &neurons, const Eigen::VectorXd &input) {
   if (neurons.size() == 0 || input.size() == 0) {
@@ -311,7 +356,10 @@ void render_heatmap(const Eigen::VectorXd &neurons, const Eigen::VectorXd &input
 // Control panel for tuning parameters and network controls
 void render_control_panel(Parameters &params,
                           RingAttractor &attractor,
-                          bool &needs_reconstruction) {
+                          bool &needs_reconstruction,
+                          std::vector<Eigen::VectorXd> &history,
+                          std::vector<double> &mse_history,
+                          bool &is_paused) {
   ImGui::Begin("Control Panel");
 
   ImGui::Text("Tuning Parameters");
@@ -334,17 +382,35 @@ void render_control_panel(Parameters &params,
   }
 
   ImGui::Separator();
+  ImGui::Text("Simulation Controls");
+
+  // Pause/Resume button
+  if (is_paused) {
+    if (ImGui::Button("Resume (Space)")) {
+      is_paused = false;
+    }
+  } else {
+    if (ImGui::Button("Pause (Space)")) {
+      is_paused = true;
+    }
+  }
+
+  ImGui::Separator();
   ImGui::Text("Network Controls");
 
   // Zero out network button
   if (ImGui::Button("Zero Network")) {
     attractor.neurons.setZero();
+    history.clear();  // Clear neuron history
+    mse_history.clear();  // Clear MSE history
   }
 
   // Reset parameters button
   if (ImGui::Button("Reset Parameters")) {
     params = Parameters{};  // Reset to defaults
     needs_reconstruction = true;
+    history.clear();  // Clear neuron history
+    mse_history.clear();  // Clear MSE history
   }
 
   ImGui::End();
@@ -475,10 +541,13 @@ auto main() -> int {
   Eigen::VectorXd input = Eigen::VectorXd::Zero(RING_SIZE);
   double θ_in = 0.0;
   bool needs_reconstruction = false;
+  bool is_paused = false;  // Simulation pause state
 
   std::vector<Eigen::VectorXd> history;
+  std::vector<double> mse_history;
   constexpr size_t MAX_HISTORY = 1000;
   history.reserve(MAX_HISTORY);
+  mse_history.reserve(MAX_HISTORY);
 
   // Main loop
   while (!glfwWindowShouldClose(window)) {
@@ -492,24 +561,46 @@ auto main() -> int {
       needs_reconstruction = false;
     }
 
-    // Update simulation
-    update_simulation(attractor, input, θ_in, params);
-    history.push_back(attractor.state());
-    if (history.size() > MAX_HISTORY) {
-      history.erase(history.begin());
+    // Update simulation only if not paused
+    if (!is_paused) {
+      update_simulation(attractor, input, θ_in, params);
+      history.push_back(attractor.state());
+      if (history.size() > MAX_HISTORY) {
+        history.erase(history.begin());
+      }
+
+      // Calculate and store RMSE between heading and input angle
+      double heading = attractor.heading();
+      double rmse = angle_rmse(heading, θ_in);
+      mse_history.push_back(rmse);
+      if (mse_history.size() > MAX_HISTORY) {
+        mse_history.erase(mse_history.begin());
+      }
     }
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
+    // Handle spacebar for pause/unpause (after ImGui frame begins)
+    static bool space_pressed = false;
+    bool space_key_down = ImGui::IsKeyDown(ImGuiKey_Space);
+    
+    if (space_key_down && !space_pressed) {
+      is_paused = !is_paused;
+      space_pressed = true;
+    } else if (!space_key_down) {
+      space_pressed = false;
+    }
+
     // Enable docking over the main viewport
     ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
 
-    MyPlotStyle();
-    render_control_panel(params, attractor, needs_reconstruction);
+    // MyPlotStyle();
+    render_control_panel(params, attractor, needs_reconstruction, history, mse_history, is_paused);
     render_ring_plot(attractor.state());
     render_time_series(history);
+    render_mse_plot(mse_history);
     render_heatmap(attractor.state(), input);
 
     ImGui::SetNextWindowPos(ImVec2(0, 450), ImGuiCond_FirstUseEver);
