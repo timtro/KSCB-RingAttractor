@@ -9,7 +9,6 @@
 #include <stdio.h>
 
 #include <Eigen/Dense>
-#include <algorithm>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -18,8 +17,8 @@
 #include "imgui_impl_opengl3.h"
 #include "ringlib/RingAttractor.hpp"
 
-constexpr double STEP_SIZE = 0.05;
-constexpr size_t RING_SIZE = 18;
+constexpr double STEP_SIZE = 0.01;
+constexpr size_t RING_SIZE = 24;
 constexpr double π = std::numbers::pi;
 using RingAttractor = ringlib::FeleRingAttractor<RING_SIZE>;
 
@@ -502,7 +501,7 @@ auto main() -> int {
 
   std::vector<Eigen::VectorXd> history;
   std::vector<double> mse_history;
-  constexpr size_t MAX_HISTORY = 1000;
+  constexpr size_t MAX_HISTORY = 500;
   history.reserve(MAX_HISTORY);
   mse_history.reserve(MAX_HISTORY);
 
@@ -522,7 +521,7 @@ auto main() -> int {
 
     if (!is_paused) {
       update_simulation(attractor, input, θ_in, params);
-      history.push_back(attractor.state());
+      history.push_back(attractor.neurons);
       if (history.size() > MAX_HISTORY) {
         history.erase(history.begin());
       }
@@ -573,17 +572,17 @@ auto main() -> int {
 
     render_control_panel(params, attractor, needs_reconstruction, history, mse_history,
                          is_paused, sum_squared_errors, error_count);
-    render_ring_plot(attractor.state());
+    render_ring_plot(attractor.neurons);
     render_time_series(history);
     render_mse_plot(mse_history);
-    render_heatmap(attractor.state(), input);
+    render_heatmap(attractor.neurons, input);
 
     ImGui::SetNextWindowPos(ImVec2(0, 450), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(400, 270), ImGuiCond_FirstUseEver);
     ImGui::Begin("State Display");
     ImGui::Text("Neuron States:");
-    for (size_t i = 0; i < static_cast<size_t>(attractor.state().size()); ++i) {
-      ImGui::Text("Neuron %zu: %.4f", i, attractor.state()[static_cast<int>(i)]);
+    for (size_t i = 0; i < static_cast<size_t>(attractor.neurons.size()); ++i) {
+      ImGui::Text("Neuron %zu: %.4f", i, attractor.neurons[static_cast<int>(i)]);
     }
     ImGui::End();
 

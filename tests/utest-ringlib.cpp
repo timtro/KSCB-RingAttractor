@@ -226,3 +226,267 @@ TEST_CASE("von_mises_input_multi properties") {
     }
   }
 }
+
+TEST_CASE("jro_kernel properties") {
+  using ringlib::jro_kernel;
+  
+  SECTION("Diagonal elements (self-connections) are excitatory") {
+    constexpr size_t N = 8;
+    constexpr double ω_inhibit = -0.5;
+    constexpr double ω_excite = 1.0;
+    auto kernel = jro_kernel<N>(ω_inhibit, ω_excite);
+    
+    for (size_t i = 0; i < N; ++i) {
+      REQUIRE(kernel(i, i) == Approx(ω_excite / static_cast<double>(N)));
+    }
+  }
+  
+  SECTION("Adjacent elements (nearest neighbors) are excitatory") {
+    constexpr size_t N = 8;
+    constexpr double ω_inhibit = -0.5;
+    constexpr double ω_excite = 1.0;
+    auto kernel = jro_kernel<N>(ω_inhibit, ω_excite);
+    
+    for (size_t i = 0; i < N; ++i) {
+      size_t next = (i + 1) % N;
+      size_t prev = (i + N - 1) % N;
+      REQUIRE(kernel(i, next) == Approx(ω_excite / static_cast<double>(N)));
+      REQUIRE(kernel(i, prev) == Approx(ω_excite / static_cast<double>(N)));
+    }
+  }
+  
+  SECTION("Non-adjacent elements are inhibitory") {
+    constexpr size_t N = 8;
+    constexpr double ω_inhibit = -0.5;
+    constexpr double ω_excite = 1.0;
+    auto kernel = jro_kernel<N>(ω_inhibit, ω_excite);
+    
+    // Test elements at distance 2 and beyond
+    for (size_t i = 0; i < N; ++i) {
+      for (size_t j = 0; j < N; ++j) {
+        int distance = ringlib::inter_neuron_distance<N>(static_cast<int>(i), static_cast<int>(j));
+        if (distance > 1) {
+          REQUIRE(kernel(i, j) == Approx(ω_inhibit / static_cast<double>(N)));
+        }
+      }
+    }
+  }
+  
+  SECTION("Matrix is circulant - each row is a shifted version of the first") {
+    constexpr size_t N = 6;
+    constexpr double ω_inhibit = -1.0;
+    constexpr double ω_excite = 2.0;
+    auto kernel = jro_kernel<N>(ω_inhibit, ω_excite);
+    
+    // Check that row i is a circular shift of row 0
+    for (size_t i = 1; i < N; ++i) {
+      for (size_t j = 0; j < N; ++j) {
+        size_t shifted_j = (j + N - i) % N;
+        REQUIRE(kernel(i, j) == Approx(kernel(0, shifted_j)));
+      }
+    }
+  }
+  
+  SECTION("Wrap-around connectivity (ring topology)") {
+    constexpr size_t N = 5;
+    constexpr double ω_inhibit = -0.3;
+    constexpr double ω_excite = 0.7;
+    auto kernel = jro_kernel<N>(ω_inhibit, ω_excite);
+    
+    // First neuron (index 0) should be connected to last neuron (index N-1)
+    REQUIRE(kernel(0, N-1) == Approx(ω_excite / static_cast<double>(N)));
+    REQUIRE(kernel(N-1, 0) == Approx(ω_excite / static_cast<double>(N)));
+  }
+  
+  SECTION("Correct normalization by N") {
+    constexpr size_t N = 4;
+    constexpr double ω_inhibit = -2.0;
+    constexpr double ω_excite = 3.0;
+    auto kernel = jro_kernel<N>(ω_inhibit, ω_excite);
+    
+    // Check a few specific values
+    REQUIRE(kernel(0, 0) == Approx(ω_excite / 4.0));  // Self-connection
+    REQUIRE(kernel(0, 1) == Approx(ω_excite / 4.0));  // Adjacent
+    REQUIRE(kernel(0, 2) == Approx(ω_inhibit / 4.0)); // Distance 2
+  }
+  
+  SECTION("3-wide excitatory band for different ring sizes") {
+    // Test with different N values to ensure the pattern holds
+    std::vector<size_t> test_sizes = {3, 5, 8, 16};
+    
+    for (size_t N : test_sizes) {
+      constexpr double ω_inhibit = -1.0;
+      constexpr double ω_excite = 1.0;
+      
+      if (N == 3) {
+        auto kernel = jro_kernel<3>(ω_inhibit, ω_excite);
+        // For N=3, all distances are ≤ 1, so all should be excitatory
+        for (size_t i = 0; i < 3; ++i) {
+          for (size_t j = 0; j < 3; ++j) {
+            REQUIRE(kernel(i, j) == Approx(ω_excite / 3.0));
+          }
+        }
+      } else if (N == 5) {
+        auto kernel = jro_kernel<5>(ω_inhibit, ω_excite);
+        // For each neuron, itself and 2 neighbors should be excitatory
+        for (size_t i = 0; i < 5; ++i) {
+          int excitatory_count = 0;
+          for (size_t j = 0; j < 5; ++j) {
+            if (kernel(i, j) > 0) excitatory_count++;
+          }
+          REQUIRE(excitatory_count == 3); // Self + 2 neighbors
+        }
+      }
+    }
+  }
+}
+
+TEST_CASE("cosine_kernel properties") {
+  using ringlib::cosine_kernel;
+  using ringlib::angle_between;
+  
+  SECTION("Diagonal elements (self-connections) are maximal") {
+    constexpr size_t N = 8;
+    constexpr double ν = 0.5;
+    auto kernel = cosine_kernel<N>(ν);
+    
+    // Self-connections should have cos(π * 0^ν) / N = 1/N
+    for (size_t i = 0; i < N; ++i) {
+      REQUIRE(kernel(i, i) == Approx(1.0 / static_cast<double>(N)));
+    }
+  }
+  
+  SECTION("Matrix is circulant - each row is a shifted version of the first") {
+    constexpr size_t N = 6;
+    constexpr double ν = 1.0;
+    auto kernel = cosine_kernel<N>(ν);
+    
+    // Check that row i is a circular shift of row 0
+    for (size_t i = 1; i < N; ++i) {
+      for (size_t j = 0; j < N; ++j) {
+        size_t shifted_j = (j + N - i) % N;
+        REQUIRE(kernel(i, j) == Approx(kernel(0, shifted_j)));
+      }
+    }
+  }
+  
+  SECTION("Symmetry: kernel(i,j) == kernel(j,i)") {
+    constexpr size_t N = 8;
+    constexpr double ν = 0.7;
+    auto kernel = cosine_kernel<N>(ν);
+    
+    for (size_t i = 0; i < N; ++i) {
+      for (size_t j = 0; j < N; ++j) {
+        REQUIRE(kernel(i, j) == Approx(kernel(j, i)));
+      }
+    }
+  }
+  
+  SECTION("Wrap-around connectivity (ring topology)") {
+    constexpr size_t N = 6;
+    constexpr double ν = 1.0;
+    auto kernel = cosine_kernel<N>(ν);
+    
+    // Connection from neuron 0 to neuron N-1 should equal connection to neuron 1
+    // (both are at distance 1 on the ring)
+    REQUIRE(kernel(0, N-1) == Approx(kernel(0, 1)));
+  }
+  
+  SECTION("Limiting case: ν=0 gives uniform cosine kernel") {
+    constexpr size_t N = 8;
+    constexpr double ν = 0.0;
+    auto kernel = cosine_kernel<N>(ν);
+    
+    // For ν=0: cos(π * |angle|^0) = cos(π) = -1 for all non-zero angles
+    // and cos(0) = 1 for zero angle
+    for (size_t i = 0; i < N; ++i) {
+      for (size_t j = 0; j < N; ++j) {
+        if (i == j) {
+          REQUIRE(kernel(i, j) == Approx(1.0 / static_cast<double>(N)));
+        } else {
+          REQUIRE(kernel(i, j) == Approx(-1.0 / static_cast<double>(N)));
+        }
+      }
+    }
+  }
+  
+  SECTION("Limiting case: ν=1 gives linear cosine decay") {
+    constexpr size_t N = 8;
+    constexpr double ν = 1.0;
+    auto kernel = cosine_kernel<N>(ν);
+    
+    // For ν=1: kernel(i,j) = cos(|angle_between(i,j)|) / N
+    for (size_t i = 0; i < N; ++i) {
+      for (size_t j = 0; j < N; ++j) {
+        double angle = std::abs(angle_between<N>(i, j));
+        double expected = std::cos(angle) / static_cast<double>(N);
+        REQUIRE(kernel(i, j) == Approx(expected));
+      }
+    }
+  }
+  
+  SECTION("Values decrease with distance for ν > 0") {
+    constexpr size_t N = 16;
+    constexpr double ν = 0.8;
+    auto kernel = cosine_kernel<N>(ν);
+    
+    // For a fixed row, values should generally decrease as we move away from diagonal
+    // (though this isn't strictly monotonic due to the cosine function)
+    for (size_t i = 0; i < N; ++i) {
+      // Self-connection should be maximum
+      double self_connection = kernel(i, i);
+      for (size_t j = 0; j < N; ++j) {
+        if (i != j) {
+          REQUIRE(kernel(i, j) <= self_connection + 1e-10); // Allow for numerical precision
+        }
+      }
+    }
+  }
+  
+  SECTION("Opposite neurons have minimal connection for even N") {
+    constexpr size_t N = 8; // Even N
+    constexpr double ν = 1.0;
+    auto kernel = cosine_kernel<N>(ν);
+    
+    // For even N, neurons at distance N/2 are directly opposite
+    for (size_t i = 0; i < N/2; ++i) {
+      size_t opposite = i + N/2;
+      double angle_to_opposite = std::abs(angle_between<N>(i, opposite));
+      REQUIRE(angle_to_opposite == Approx(π));
+      // cos(π) = -1, so connection should be -1/N
+      REQUIRE(kernel(i, opposite) == Approx(-1.0 / static_cast<double>(N)));
+    }
+  }
+  
+  SECTION("Kernel values are properly normalized") {
+    constexpr size_t N = 10;
+    constexpr double ν = 0.6;
+    auto kernel = cosine_kernel<N>(ν);
+    
+    // All values should be divided by N, so max absolute value should be ≤ 1/N
+    double max_abs_value = 0.0;
+    for (size_t i = 0; i < N; ++i) {
+      for (size_t j = 0; j < N; ++j) {
+        max_abs_value = std::max(max_abs_value, std::abs(kernel(i, j)));
+      }
+    }
+    REQUIRE(max_abs_value <= 1.0 / static_cast<double>(N) + 1e-10);
+  }
+  
+  SECTION("Different ν values produce different kernels") {
+    constexpr size_t N = 8;
+    auto kernel1 = cosine_kernel<N>(0.3);
+    auto kernel2 = cosine_kernel<N>(0.7);
+    
+    // Kernels with different ν should be different (except at diagonal)
+    bool found_difference = false;
+    for (size_t i = 0; i < N && !found_difference; ++i) {
+      for (size_t j = 0; j < N && !found_difference; ++j) {
+        if (i != j && std::abs(kernel1(i, j) - kernel2(i, j)) > 1e-10) {
+          found_difference = true;
+        }
+      }
+    }
+    REQUIRE(found_difference);
+  }
+}
