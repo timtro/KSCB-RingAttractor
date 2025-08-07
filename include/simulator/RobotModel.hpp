@@ -93,6 +93,12 @@ struct JRONavStack {
   ringlib::JRORing<N> orientation_ring;  // D
   ringlib::JRORing<N> error_ring_cw;  // E
   ringlib::JRORing<N> error_ring_ccw;  // F
+  //
+  ringlib::Neuron G{.τ = params.τ, .γ = params.γ, .σ = params.σ};
+  ringlib::Neuron H{.τ = params.τ, .γ = params.γ, .σ = params.σ};
+  ringlib::Neuron I{.τ = params.τ, .γ = params.γ, .σ = params.σ};
+  ringlib::Neuron J{.τ = params.τ, .γ = params.γ, .σ = params.σ};
+  ringlib::Neuron K{.τ = params.τ, .γ = params.γ, .σ = params.σ};
 
   MatrixType kernel_c =
       ringlib::jro_kernel<N>(params.ω_CC_inhibit, params.ω_CC_excite);  // C
@@ -109,7 +115,6 @@ struct JRONavStack {
     target_ring.update(
         ringlib::gauss_stim_single<N>(params.γ, params.α, params.ξ, relative_target.θ),
         dt);
-
     // B --- obstacle encoding layer
     double c_ρ = params.c / relative_obstacle.r;
     auto g = [this, &relative_obstacle](double c_over_ρ) -> VectorType {
@@ -156,6 +161,21 @@ struct JRONavStack {
         params.ω_ED * orientation_ring.neurons + kernel_e * setpoint_ring.neurons, dt);
     error_ring_cw.update(
         params.ω_FC * setpoint_ring.neurons + kernel_f * orientation_ring.neurons, dt);
+    //
+    // Motor command circuit
+    //
+    // G
+    G.update(params.ω_GE * error_ring_cw.neurons.sum());
+    H.update(params.ω_HF * error_ring_ccw.neurons.sum());
+    I.update(params.ω_IG * G.value - params.ω_IH * H.value, dt);
+    J.update(params.ω_JH * H.value - params.ω_JG * G.value, dt);
+    auto hBD = (params.ω_U * obstacle_ring.neurons.sum() * params.ω_V
+                * orientation_ring.neurons.sum())
+        / params.ω_S;
+    constexpr double ρ_to = 100.00;
+    K.update(-hBD - params.ω_KI * I.value - params.ω_KJ * J.value
+                 + params.γ * relative_target.r / ρ_to,
+             dt);
   }
 };
 

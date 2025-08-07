@@ -428,6 +428,25 @@ constexpr auto gauss_stim_single(double γ, double α, double ξ, double θ_tgt)
 
   return b;
 }
+
+struct Neuron {
+  double value = 0.;
+  double τ = 0.;
+  double γ = 0.;
+  double σ = 0.;
+
+  // Neuron(JROParameters params) : τ(params.τ), γ(params.γ), σ(params.σ) {
+  //   if (τ <= 0.0)
+  //     throw std::invalid_argument("Time constant τ must be positive");
+  //   if (σ <= 0.0)
+  //     throw std::invalid_argument("NR sigma σ must be positive");
+  //   if (γ <= 0.0)
+  //     throw std::invalid_argument("NR gamma γ must be positive");
+  // }
+
+  void update(double input, double dt) { value += dt * naka_rushton_μ2(γ, σ, input); }
+};
+
 }  // namespace ringlib
 
 constexpr auto wrap_angle(double angle) -> double {
