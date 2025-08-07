@@ -236,7 +236,7 @@ struct JRORingAttractor {
 };
 
 template <size_t N>
-struct NRORing {
+struct JRORing {
   using VectorType = Eigen::Vector<double, N>;
   using MatrixType = Eigen::Matrix<double, N, N>;
 
@@ -246,7 +246,7 @@ struct NRORing {
   double σ = 40.0;
   VectorType neurons;
 
-  NRORing(double τ_, double γ_, double μ_, double σ_)
+  JRORing(double τ_, double γ_, double μ_, double σ_)
       : τ(τ_), γ(γ_), μ(μ_), σ(σ_), neurons(VectorType::Zero()) {
     if (τ_ <= 0.0)
       throw std::invalid_argument("Time constant τ must be positive");
@@ -261,7 +261,7 @@ struct NRORing {
       throw std::invalid_argument("NR exponent μ must be positive");
   }
 
-  NRORing(JROParameters params_)
+  JRORing(JROParameters params_)
       : τ(params_.τ),
         γ(params_.γ),
         μ(params_.μ),

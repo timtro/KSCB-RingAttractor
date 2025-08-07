@@ -38,7 +38,7 @@ auto to_robot_polar(MotionState &m, T &t) -> PolarCoordinates {
 }
 
 template <size_t N>
-struct FeleAttractorNavStack {
+struct JRONavStack {
   using VectorType = Eigen::Vector<double, N>;
   using MatrixType = Eigen::Matrix<double, N, N>;
 
@@ -53,11 +53,11 @@ struct FeleAttractorNavStack {
 
   ringlib::FeleParameters params;
 
-  ringlib::FeleRing<N> target_ring;  // A
-  ringlib::FeleRing<N> obstacle_ring;  // B
-  ringlib::FeleRingAttractor<N> setpoint_ring;  // C
-  ringlib::FeleRingAttractor<N> orientation_ring;  // D
-  ringlib::FeleRingAttractor<N> error_ring;  // E and F
+  ringlib::JRORing<N> target_ring;  // A
+  ringlib::JRORing<N> obstacle_ring;  // B
+  ringlib::JRORingAttractor<N> setpoint_ring;  // C
+  ringlib::JRORingAttractor<N> orientation_ring;  // D
+  ringlib::JRORing<N> error_ring;  // E and F
 
   void update_rings(std::span<Obstacle> obstacles, Target target) {}
 };
