@@ -15,6 +15,11 @@ struct Obstacle {
   double x, y;
 };
 
+struct PolarCoordinates {
+  double r;  // radius in meters
+  double θ;  // angle in radians
+};
+
 using MotionState = Eigen::Matrix<double, 5, 1>;
 using ControlSpace = Eigen::Matrix<double, 2, 1>;
 
@@ -24,8 +29,16 @@ auto by_elements(MotionState &x)
 auto by_elements(const MotionState &x) -> std::
     tuple<const double &, const double &, const double &, const double &, const double &>;
 
+template <typename T>
+auto to_robot_polar(MotionState &m, T &t) -> PolarCoordinates {
+  auto [x, y, θ, v, ω] = by_elements(m);
+  auto Δx = x - t.x;
+  auto Δy = y - t.y;
+  return {.r = std::hypot(Δx, Δy), .θ = std::atan2(Δy, Δx)};
+}
+
 template <size_t N>
-struct RingAttractorNavStack {
+struct FeleAttractorNavStack {
   using VectorType = Eigen::Vector<double, N>;
   using MatrixType = Eigen::Matrix<double, N, N>;
 
@@ -38,17 +51,10 @@ struct RingAttractorNavStack {
   auto v() const -> double { return motion_state(3); };
   auto ω() const -> double { return motion_state(4); };
 
-  struct RingAttractorParameters {
-    float γ = 8.0f;  // Input gain
-    float κ = 8.0f;  // Von Mises concentration
-    float ν = 0.10f;  // Kernel parameter
-    float network_coupling_constant = 6.0f;  // Network coupling strength
-  };
+  ringlib::FeleParameters params;
 
-  RingAttractorParameters params;
-
-  ringlib::FeleRingAttractor<N> target_ring;  // A
-  ringlib::FeleRingAttractor<N> obstacle_ring;  // B
+  ringlib::FeleRing<N> target_ring;  // A
+  ringlib::FeleRing<N> obstacle_ring;  // B
   ringlib::FeleRingAttractor<N> setpoint_ring;  // C
   ringlib::FeleRingAttractor<N> orientation_ring;  // D
   ringlib::FeleRingAttractor<N> error_ring;  // E and F

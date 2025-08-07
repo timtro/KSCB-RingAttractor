@@ -6,21 +6,21 @@
 
 namespace rob {
 
-auto by_elements(RobotState &x)
+auto by_elements(MotionState &x)
     -> std::tuple<double &, double &, double &, double &, double &> {
   return std::tie(x(0), x(1), x(2), x(3), x(4));
 }
 
-auto by_elements(const RobotState &x) -> std::tuple<const double &,
-                                                    const double &,
-                                                    const double &,
-                                                    const double &,
-                                                    const double &> {
+auto by_elements(const MotionState &x) -> std::tuple<const double &,
+                                                     const double &,
+                                                     const double &,
+                                                     const double &,
+                                                     const double &> {
   return std::tie(x(0), x(1), x(2), x(3), x(4));
 }
 
-auto rk4_step(const RobotState &x₀, const ControlSpace &u, double dt) -> RobotState {
-  auto dxdt = [&u](const RobotState &state) -> RobotState {
+auto rk4_step(const MotionState &x₀, const ControlSpace &u, double dt) -> MotionState {
+  auto dxdt = [&u](const MotionState &state) -> MotionState {
     const auto &[x, y, θ, v, ω] = by_elements(state);
     return {v * std::cos(θ),  // dx/dt = v * cos(θ)
             v * std::sin(θ),  // dy/dt = v * sin(θ)

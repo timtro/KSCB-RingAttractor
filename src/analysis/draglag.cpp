@@ -39,8 +39,8 @@ void update_simulation(RingAttractor &attractor,
                        double &θ_in,
                        const Parameters &params) {
   if (params.use_input) {
-    input = ringlib::von_mises_input_single<RING_SIZE>(
-        static_cast<double>(params.κ), θ_in, static_cast<double>(params.γ));
+    input = ringlib::von_mises_stim_single<RING_SIZE>(static_cast<double>(params.κ), θ_in,
+                                                      static_cast<double>(params.γ));
     θ_in = wrap_angle(θ_in + STEP_SIZE * static_cast<double>(params.input_speed));
   } else {
     input = Eigen::VectorXd::Zero(RING_SIZE);
@@ -492,8 +492,12 @@ auto main() -> int {
 
   // Setup simulation and GUI state
   Parameters params;
-  RingAttractor attractor(static_cast<double>(params.ν),
-                          static_cast<double>(params.network_coupling_constant));
+  ringlib::FeleParameters fele_params{
+      .ν = static_cast<double>(params.ν),
+      .υ = static_cast<double>(params.network_coupling_constant),
+      .γ = static_cast<double>(params.γ),
+      .κ = static_cast<double>(params.κ)};
+  RingAttractor attractor(fele_params);
   Eigen::VectorXd input = Eigen::VectorXd::Zero(RING_SIZE);
   double θ_in = 0.0;
   bool needs_reconstruction = false;
@@ -514,8 +518,12 @@ auto main() -> int {
 
     // Reconstruct attractor if it's construction parameters are changed
     if (needs_reconstruction) {
-      attractor = RingAttractor(static_cast<double>(params.ν),
-                                static_cast<double>(params.network_coupling_constant));
+      ringlib::FeleParameters fele_params{
+          .ν = static_cast<double>(params.ν),
+          .υ = static_cast<double>(params.network_coupling_constant),
+          .γ = static_cast<double>(params.γ),
+          .κ = static_cast<double>(params.κ)};
+      attractor = RingAttractor(fele_params);
       needs_reconstruction = false;
     }
 
