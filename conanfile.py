@@ -17,9 +17,9 @@ class CppRecipe(ConanFile):
     def requirements(self):
         self.requires("spdlog/1.15.1")
         self.requires("eigen/3.4.0")
-        self.requires("zeromq/4.3.5")
-        self.requires("cppzmq/4.10.0")
-        self.requires("nlohmann_json/3.12.0")
+        # self.requires("zeromq/4.3.5")
+        # self.requires("cppzmq/4.10.0")
+        # self.requires("nlohmann_json/3.12.0")
         self.requires("catch2/3.8.0")
         self.requires("imgui/1.91.0-docking", override=True)
         self.requires("implot/0.16")
